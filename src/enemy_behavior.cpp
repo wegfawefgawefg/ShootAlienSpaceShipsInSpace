@@ -45,7 +45,8 @@ void spawn_enemy_bullet(BattleState& battle, const Enemy& enemy) {
     Vec2 dir = battle.ship.pos - enemy.pos;
     const float len = std::max(vec2_length(dir), 0.001f);
     dir = {dir.x / len, dir.y / len};
-    battle.enemy_bullets.push_back({enemy.pos, dir * 120.0f, 0.0f, 2.0f, 1.0f, 4.0f, 2});
+    battle.enemy_bullets.push_back(
+        {enemy.pos, dir * 120.0f, 0.0f, 1.25f, 1.0f, 4.0f, 3.0f, 3.0f, 3.0f, 2});
 }
 
 void update_enemy_facing(Enemy& enemy, const Ship& ship) {
@@ -66,6 +67,7 @@ void update_enemy_behavior(Enemy& enemy, BattleState& battle, float dt) {
     enemy.behavior_timer += dt;
     enemy.shoot_timer -= dt;
     enemy.shake *= 0.5f;
+    enemy.hover_phase += dt * (2.5f + static_cast<float>(enemy.type_id % 3));
 
     switch (enemy.behavior) {
     case EnemyBehavior::Straight:
@@ -140,6 +142,9 @@ void update_enemy_behavior(Enemy& enemy, BattleState& battle, float dt) {
 
     enemy.pos.x = wrap_axis(enemy.pos.x, -12.0f, GAME_WIDTH + 12.0f);
     enemy.pos.y = wrap_axis(enemy.pos.y, -18.0f, GAME_HEIGHT + 18.0f);
+    enemy.target_height =
+        enemy.base_height + std::sin(enemy.hover_phase) * 0.6f - enemy.shake * 0.1f;
+    enemy.height += (enemy.target_height - enemy.height) * std::min(1.0f, dt * 10.0f);
     update_enemy_facing(enemy, battle.ship);
 }
 
@@ -168,16 +173,19 @@ void start_level(BattleState& battle, int level_index) {
         enemy.type_id = spawn.type_id;
         enemy.behavior = spawn.behavior;
         enemy.facing = spawn.facing;
-        enemy.radius = 6.0f + static_cast<float>(spawn.type_id % 3);
+        enemy.radius = 2.75f + static_cast<float>(spawn.type_id % 2) * 0.5f;
         enemy.hp = 1.0f + static_cast<float>(spawn.type_id % 3);
         enemy.max_hp = enemy.hp;
+        enemy.base_height = 4.0f + static_cast<float>(spawn.type_id % 3) * 0.35f;
+        enemy.height = enemy.base_height;
+        enemy.target_height = enemy.base_height;
         enemy.orbit_phase = random_range(0.0f, 6.2831853f);
         enemy.shoot_timer = random_range(0.2f, 1.0f);
         battle.enemies.push_back(enemy);
     }
 }
 
-void update_enemy_intro(BattleState& battle, float dt) {
+bool update_enemy_intro(BattleState& battle, float dt) {
     battle.level_timer += dt;
     battle.level_text_timer += dt;
     const float progress = clampf(battle.level_timer / LEVEL_INTRO_DURATION, 0.0f, 1.0f);
@@ -186,6 +194,8 @@ void update_enemy_intro(BattleState& battle, float dt) {
     for (Enemy& enemy : battle.enemies) {
         enemy.pos = lerp(enemy.intro_start, enemy.formation_pos, eased);
         enemy.vel = enemy.formation_pos - enemy.pos;
+        enemy.target_height = enemy.base_height + (1.0f - eased) * 3.0f;
+        enemy.height += (enemy.target_height - enemy.height) * std::min(1.0f, dt * 9.0f);
         enemy.angle_deg = angle_from_vector(enemy.vel);
     }
 
@@ -193,7 +203,9 @@ void update_enemy_intro(BattleState& battle, float dt) {
         battle.level_timer = 0.0f;
         battle.phase = BattlePhase::Active;
         battle.can_shoot = true;
+        return true;
     }
+    return false;
 }
 
 void update_enemy_wave(BattleState& battle, float dt) {

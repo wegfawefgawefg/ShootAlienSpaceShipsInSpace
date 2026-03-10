@@ -29,7 +29,7 @@ Mix_Chunk* load_sound(const char* path) {
     return sound;
 }
 
-TTF_Font* load_font() {
+TTF_Font* load_font(int point_size) {
     static const std::array<const char*, 4> candidate_paths = {
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -41,7 +41,7 @@ TTF_Font* load_font() {
         if (!std::filesystem::exists(path)) {
             continue;
         }
-        TTF_Font* font = TTF_OpenFont(path, 20);
+        TTF_Font* font = TTF_OpenFont(path, point_size);
         if (font) {
             return font;
         }
@@ -74,7 +74,8 @@ bool load_sound_array(std::array<Mix_Chunk*, 2>& sounds, const std::array<const 
 } // namespace
 
 bool assets_load(Assets& assets, SDL_Renderer* renderer) {
-    assets.ui_font = load_font();
+    assets.ui_font_small = load_font(14);
+    assets.ui_font_large = load_font(28);
     assets.menu_background = load_texture(renderer, "assets/cover.png");
     assets.menu_title = load_texture(renderer, "assets/title.png");
     assets.ships.texture = load_texture(renderer, "assets/ships.png");
@@ -89,8 +90,9 @@ bool assets_load(Assets& assets, SDL_Renderer* renderer) {
     assets.particles.tile_width = 8;
     assets.particles.tile_height = 8;
 
-    const bool textures_ok = assets.ui_font && assets.menu_background && assets.menu_title &&
-                             assets.ships.texture && assets.particles.texture;
+    const bool textures_ok = assets.ui_font_small && assets.ui_font_large &&
+                             assets.menu_background && assets.menu_title && assets.ships.texture &&
+                             assets.particles.texture;
     if (!textures_ok) {
         return false;
     }
@@ -145,9 +147,13 @@ void assets_unload(Assets& assets) {
     destroy_texture(assets.menu_title);
     destroy_texture(assets.ships.texture);
     destroy_texture(assets.particles.texture);
-    if (assets.ui_font) {
-        TTF_CloseFont(assets.ui_font);
-        assets.ui_font = nullptr;
+    if (assets.ui_font_small) {
+        TTF_CloseFont(assets.ui_font_small);
+        assets.ui_font_small = nullptr;
+    }
+    if (assets.ui_font_large) {
+        TTF_CloseFont(assets.ui_font_large);
+        assets.ui_font_large = nullptr;
     }
 
     for (Mix_Chunk*& sound : assets.laser_sounds) {

@@ -57,7 +57,7 @@ struct Weapon {
     float cooldown_timer{0.0f};
     float projectile_speed{1600.0f};
     float projectile_life{0.5f};
-    float projectile_radius{2.0f};
+    float projectile_radius{1.25f};
     float damage{1.0f};
     float spread_degrees{14.0f};
 };
@@ -71,9 +71,12 @@ struct PlayerBullet {
     Vec2 pos{};
     Vec2 vel{};
     float age{0.0f};
-    float radius{2.0f};
+    float radius{1.25f};
     float damage{1.0f};
     float life{0.5f};
+    float base_height{3.0f};
+    float height{3.0f};
+    float target_height{3.0f};
     int tile{1};
 };
 
@@ -81,9 +84,12 @@ struct EnemyBullet {
     Vec2 pos{};
     Vec2 vel{};
     float age{0.0f};
-    float radius{2.0f};
+    float radius{1.25f};
     float damage{1.0f};
     float life{4.0f};
+    float base_height{3.0f};
+    float height{3.0f};
+    float target_height{3.0f};
     int tile{2};
 };
 
@@ -92,6 +98,9 @@ struct Particle {
     Vec2 vel{};
     float age{0.0f};
     float life{0.5f};
+    float base_height{1.5f};
+    float height{1.5f};
+    float target_height{1.5f};
     int tile{0};
 };
 
@@ -103,8 +112,12 @@ struct Star {
 struct Ship {
     Vec2 pos{};
     Vec2 vel{};
-    float radius{6.0f};
+    float radius{2.75f};
     float shake{0.0f};
+    float base_height{5.0f};
+    float height{5.0f};
+    float target_height{5.0f};
+    float hover_phase{0.0f};
 };
 
 struct Enemy {
@@ -113,7 +126,7 @@ struct Enemy {
     Vec2 intro_start{};
     Vec2 formation_pos{};
     Vec2 wander_target{};
-    float radius{6.0f};
+    float radius{3.0f};
     float angle_deg{0.0f};
     float behavior_timer{0.0f};
     float shoot_timer{0.0f};
@@ -122,6 +135,10 @@ struct Enemy {
     float hp{1.0f};
     float max_hp{1.0f};
     float shake{0.0f};
+    float base_height{4.0f};
+    float height{4.0f};
+    float target_height{4.0f};
+    float hover_phase{0.0f};
     int type_id{0};
     EnemyBehavior behavior{EnemyBehavior::Straight};
     EnemyFacing facing{EnemyFacing::FaceDown};

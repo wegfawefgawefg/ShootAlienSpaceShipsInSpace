@@ -8,6 +8,7 @@
 struct App {
     SDL_Window* window{nullptr};
     SDL_Renderer* renderer{nullptr};
+    SDL_Texture* scene_target{nullptr};
     Assets assets{};
     SessionState session{};
     bool running{true};

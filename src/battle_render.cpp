@@ -2,18 +2,15 @@
 
 #include "level_data.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <string>
 
 namespace {
 
-constexpr float UI_LEFT_WIDTH = 24.0f;
-constexpr float UI_RIGHT_WIDTH = 64.0f;
-constexpr float PLAYFIELD_LEFT = UI_LEFT_WIDTH;
-constexpr float PLAYFIELD_WIDTH = GAME_WIDTH - UI_LEFT_WIDTH - UI_RIGHT_WIDTH;
-constexpr float PLAYFIELD_HEIGHT = GAME_HEIGHT;
 constexpr float LEVEL_TEXT_DURATION = 1.3f;
+constexpr float PANEL_PADDING = 12.0f;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -36,16 +33,31 @@ float angle_from_vector(Vec2 dir) {
 }
 
 Vec2 world_to_screen(const CameraState& camera, Vec2 world_pos) {
-    return {PLAYFIELD_LEFT + PLAYFIELD_WIDTH * 0.5f + (world_pos.x - camera.center.x) * camera.zoom,
-            PLAYFIELD_HEIGHT * 0.5f + (world_pos.y - camera.center.y) * camera.zoom};
+    return {
+        GAME_WIDTH * 0.5f + (world_pos.x - camera.center.x) * camera.zoom,
+        GAME_HEIGHT * 0.5f + (world_pos.y - camera.center.y) * camera.zoom,
+    };
 }
 
 float camera_scale(float radius, float zoom) {
     return std::max(1.0f, radius * zoom);
 }
 
-void draw_texture(SDL_Renderer* renderer, SDL_Texture* texture, const SDL_FRect& dst) {
-    SDL_RenderCopyF(renderer, texture, nullptr, &dst);
+SDL_FRect fit_rect_within(const SDL_FRect& outer, float aspect_ratio) {
+    SDL_FRect rect = outer;
+    if (outer.w <= 0.0f || outer.h <= 0.0f) {
+        return rect;
+    }
+
+    const float outer_aspect = outer.w / outer.h;
+    if (outer_aspect > aspect_ratio) {
+        rect.w = outer.h * aspect_ratio;
+        rect.x = outer.x + (outer.w - rect.w) * 0.5f;
+    } else {
+        rect.h = outer.w / aspect_ratio;
+        rect.y = outer.y + (outer.h - rect.h) * 0.5f;
+    }
+    return rect;
 }
 
 void draw_text(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, float x, float y,
@@ -58,37 +70,62 @@ void draw_text(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, 
         return;
     }
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FRect dst = {x, y, static_cast<float>(surface->w), static_cast<float>(surface->h)};
+    const SDL_FRect dst = {x, y, static_cast<float>(surface->w), static_cast<float>(surface->h)};
     SDL_FreeSurface(surface);
-    if (!texture) {
-        return;
+    if (texture) {
+        SDL_RenderCopyF(renderer, texture, nullptr, &dst);
+        SDL_DestroyTexture(texture);
     }
-    SDL_RenderCopyF(renderer, texture, nullptr, &dst);
-    SDL_DestroyTexture(texture);
 }
 
 void draw_world_sprite(SDL_Renderer* renderer, const TextureAtlas& atlas, int tile_index,
                        const CameraState& camera, Vec2 world_pos, float angle_deg = 0.0f,
-                       Vec2 jitter = {0.0f, 0.0f}) {
+                       Vec2 jitter = {0.0f, 0.0f}, float scale_x = 1.0f, float scale_y = 1.0f) {
     const SDL_Rect src = atlas_tile_rect(atlas, tile_index);
     const Vec2 screen_pos = world_to_screen(camera, world_pos + jitter);
+    const float draw_width = static_cast<float>(atlas.tile_width) * camera.zoom * scale_x;
+    const float draw_height = static_cast<float>(atlas.tile_height) * camera.zoom * scale_y;
     const SDL_FRect dst = {
-        screen_pos.x - static_cast<float>(atlas.tile_width) * 0.5f * camera.zoom,
-        screen_pos.y - static_cast<float>(atlas.tile_height) * 0.5f * camera.zoom,
-        static_cast<float>(atlas.tile_width) * camera.zoom,
-        static_cast<float>(atlas.tile_height) * camera.zoom,
+        screen_pos.x - draw_width * 0.5f,
+        screen_pos.y - draw_height * 0.5f,
+        draw_width,
+        draw_height,
     };
     SDL_RenderCopyExF(renderer, atlas.texture, &src, &dst, angle_deg, nullptr, SDL_FLIP_NONE);
 }
 
+void draw_world_shadow(SDL_Renderer* renderer, const TextureAtlas& atlas, int tile_index,
+                       const CameraState& camera, Vec2 world_pos, float height,
+                       float angle_deg = 0.0f) {
+    const SDL_Rect src = atlas_tile_rect(atlas, tile_index);
+    const Vec2 screen_pos = world_to_screen(camera, world_pos);
+    const float offset_x = 0.6f + height * camera.zoom * 0.16f;
+    const float offset_y = 0.8f + height * camera.zoom * 0.24f;
+    const float draw_width = static_cast<float>(atlas.tile_width) * camera.zoom * 0.95f;
+    const float draw_height = static_cast<float>(atlas.tile_height) * camera.zoom * 0.72f;
+    const SDL_FRect dst = {
+        screen_pos.x - draw_width * 0.5f + offset_x,
+        screen_pos.y - draw_height * 0.5f + offset_y,
+        draw_width,
+        draw_height,
+    };
+
+    SDL_SetTextureColorMod(atlas.texture, 0, 0, 0);
+    SDL_SetTextureAlphaMod(atlas.texture,
+                           static_cast<Uint8>(clampf(170.0f - height * 10.0f, 70.0f, 150.0f)));
+    SDL_RenderCopyExF(renderer, atlas.texture, &src, &dst, angle_deg, nullptr, SDL_FLIP_NONE);
+    SDL_SetTextureColorMod(atlas.texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(atlas.texture, 255);
+}
+
 void draw_ui_sprite(SDL_Renderer* renderer, const TextureAtlas& atlas, int tile_index,
-                    float center_x, float center_y) {
+                    float center_x, float center_y, float scale = 1.0f) {
     const SDL_Rect src = atlas_tile_rect(atlas, tile_index);
     const SDL_FRect dst = {
-        center_x - static_cast<float>(atlas.tile_width) * 0.5f,
-        center_y - static_cast<float>(atlas.tile_height) * 0.5f,
-        static_cast<float>(atlas.tile_width),
-        static_cast<float>(atlas.tile_height),
+        center_x - static_cast<float>(atlas.tile_width) * 0.5f * scale,
+        center_y - static_cast<float>(atlas.tile_height) * 0.5f * scale,
+        static_cast<float>(atlas.tile_width) * scale,
+        static_cast<float>(atlas.tile_height) * scale,
     };
     SDL_RenderCopyF(renderer, atlas.texture, &src, &dst);
 }
@@ -102,7 +139,7 @@ void draw_debug_box(SDL_Renderer* renderer, const CameraState& camera, Vec2 pos,
     SDL_RenderDrawRectF(renderer, &rect);
 }
 
-void render_title(const Assets& assets, SDL_Renderer* renderer, Uint64 ticks) {
+void render_title_scene(const Assets& assets, SDL_Renderer* renderer, Uint64 ticks) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
@@ -114,9 +151,13 @@ void render_title(const Assets& assets, SDL_Renderer* renderer, Uint64 ticks) {
     const float background_y = 0.3f * std::sin(t * 0.003f) * offset - offset * 1.5f;
     const float menu_scale = 0.5f;
 
-    draw_texture(renderer, assets.menu_background,
-                 {background_x * menu_scale, background_y * menu_scale,
-                  virtual_width * 1.2f * menu_scale, virtual_height * 1.2f * menu_scale});
+    const SDL_FRect background_dst = {
+        background_x * menu_scale,
+        background_y * menu_scale,
+        virtual_width * 1.2f * menu_scale,
+        virtual_height * 1.2f * menu_scale,
+    };
+    SDL_RenderCopyF(renderer, assets.menu_background, nullptr, &background_dst);
 
     const float title_y = (0.5f + std::sin(t * 0.001f) * 0.5f) * virtual_height * 0.05f;
     const SDL_FRect shadow_dst = {
@@ -140,84 +181,8 @@ void render_title(const Assets& assets, SDL_Renderer* renderer, Uint64 ticks) {
     SDL_RenderCopyF(renderer, assets.menu_title, nullptr, &title_dst);
 }
 
-void render_level_text(const SessionState& session, const Assets& assets, SDL_Renderer* renderer) {
-    if (session.scene != SceneMode::Battle || session.battle.phase != BattlePhase::LevelIntro ||
-        !assets.ui_font) {
-        return;
-    }
-
-    const float t = session.battle.level_text_timer;
-    if (t > LEVEL_TEXT_DURATION) {
-        return;
-    }
-
-    const std::string label = "Level " + std::to_string(session.battle.current_level_index + 1);
-    SDL_Color color{255, 255, 255, 255};
-    SDL_Surface* surface = TTF_RenderUTF8_Blended(assets.ui_font, label.c_str(), color);
-    if (!surface) {
-        return;
-    }
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    const int width = surface->w;
-    const int height = surface->h;
-    SDL_FreeSurface(surface);
-    if (!texture) {
-        return;
-    }
-
-    const float wiggle = std::sin(t * 10.0f) * 10.0f;
-    const float fly = ease_out_cubic(clampf(t / LEVEL_TEXT_DURATION, 0.0f, 1.0f));
-    const SDL_FRect dst = {
-        PLAYFIELD_LEFT + PLAYFIELD_WIDTH * 0.5f - static_cast<float>(width) * 0.5f +
-            std::sin(t * 6.0f) * 6.0f,
-        16.0f + wiggle + (1.0f - fly) * 18.0f,
-        static_cast<float>(width),
-        static_cast<float>(height),
-    };
-    SDL_RenderCopyF(renderer, texture, nullptr, &dst);
-    SDL_DestroyTexture(texture);
-}
-
-void render_ui(const SessionState& session, const Assets& assets, SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 8, 12, 20, 220);
-    const SDL_FRect left = {0.0f, 0.0f, UI_LEFT_WIDTH, GAME_HEIGHT};
-    const SDL_FRect right = {GAME_WIDTH - UI_RIGHT_WIDTH, 0.0f, UI_RIGHT_WIDTH, GAME_HEIGHT};
-    SDL_RenderFillRectF(renderer, &left);
-    SDL_RenderFillRectF(renderer, &right);
-
-    for (int i = 0; i < session.battle.lives; ++i) {
-        draw_ui_sprite(renderer, assets.ships, player_ship_tile_center(0), 12.0f,
-                       14.0f + 12.0f * static_cast<float>(i));
-    }
-
-    SDL_Color text = {255, 255, 255, 255};
-    draw_text(renderer, assets.ui_font,
-              "L" + std::to_string(session.battle.current_level_index + 1),
-              GAME_WIDTH - UI_RIGHT_WIDTH + 4.0f, 4.0f, text);
-    draw_text(renderer, assets.ui_font, "Party 1", GAME_WIDTH - UI_RIGHT_WIDTH + 4.0f, 18.0f, text);
-    draw_text(renderer, assets.ui_font, "Wing 0", GAME_WIDTH - UI_RIGHT_WIDTH + 4.0f, 32.0f, text);
-
-    float y = 48.0f;
-    for (std::size_t i = 0; i < session.battle.weapons.size(); ++i) {
-        const Weapon& weapon = session.battle.weapons[i];
-        std::string type = weapon.type == WeaponType::Basic ? "basic" : "missile";
-        std::string fixture = "center";
-        if (weapon.fixture == WeaponFixture::EvenlySpread) {
-            fixture = "even";
-        } else if (weapon.fixture == WeaponFixture::Splayed) {
-            fixture = "splay";
-        }
-        draw_text(renderer, assets.ui_font, std::to_string(static_cast<int>(i)) + ":" + type,
-                  GAME_WIDTH - UI_RIGHT_WIDTH + 4.0f, y, text);
-        y += 12.0f;
-        draw_text(renderer, assets.ui_font,
-                  "p" + std::to_string(weapon.projectile_tile) + " " + fixture,
-                  GAME_WIDTH - UI_RIGHT_WIDTH + 4.0f, y, text);
-        y += 16.0f;
-    }
-}
-
-void render_battle(const SessionState& session, const Assets& assets, SDL_Renderer* renderer) {
+void render_battle_scene(const SessionState& session, const Assets& assets,
+                         SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
@@ -226,22 +191,46 @@ void render_battle(const SessionState& session, const Assets& assets, SDL_Render
     }
 
     for (const Enemy& enemy : session.battle.enemies) {
+        draw_world_shadow(renderer, assets.ships, enemy_small_ship_tile(enemy.type_id),
+                          session.battle.camera, enemy.pos, enemy.height, enemy.angle_deg);
+    }
+    for (const PlayerBullet& bullet : session.battle.player_bullets) {
+        draw_world_shadow(renderer, assets.particles, bullet.tile, session.battle.camera,
+                          bullet.pos, bullet.height, angle_from_vector(bullet.vel));
+    }
+    for (const EnemyBullet& bullet : session.battle.enemy_bullets) {
+        draw_world_shadow(renderer, assets.particles, bullet.tile, session.battle.camera,
+                          bullet.pos, bullet.height, angle_from_vector(bullet.vel));
+    }
+    for (const Particle& particle : session.battle.particles) {
+        draw_world_shadow(renderer, assets.particles, particle.tile, session.battle.camera,
+                          particle.pos, particle.height);
+    }
+    if (session.battle.player_active) {
+        int ship_tile = player_ship_tile_center(0);
+        if (session.battle.ship.vel.x <= -10.0f) {
+            ship_tile = 0;
+        } else if (session.battle.ship.vel.x >= 10.0f) {
+            ship_tile = 2;
+        }
+        draw_world_shadow(renderer, assets.ships, ship_tile, session.battle.camera,
+                          session.battle.ship.pos, session.battle.ship.height);
+    }
+
+    for (const Enemy& enemy : session.battle.enemies) {
         const Vec2 jitter = {random_range(-enemy.shake, enemy.shake),
                              random_range(-enemy.shake, enemy.shake)};
         draw_world_sprite(renderer, assets.ships, enemy_small_ship_tile(enemy.type_id),
                           session.battle.camera, enemy.pos, enemy.angle_deg, jitter);
     }
-
     for (const PlayerBullet& bullet : session.battle.player_bullets) {
         draw_world_sprite(renderer, assets.particles, bullet.tile, session.battle.camera,
                           bullet.pos, angle_from_vector(bullet.vel));
     }
-
     for (const EnemyBullet& bullet : session.battle.enemy_bullets) {
         draw_world_sprite(renderer, assets.particles, bullet.tile, session.battle.camera,
                           bullet.pos, angle_from_vector(bullet.vel));
     }
-
     for (const Particle& particle : session.battle.particles) {
         draw_world_sprite(renderer, assets.particles, particle.tile, session.battle.camera,
                           particle.pos);
@@ -280,18 +269,144 @@ void render_battle(const SessionState& session, const Assets& assets, SDL_Render
                            session.battle.ship.radius, {64, 255, 64, 255});
         }
     }
+}
 
-    render_level_text(session, assets, renderer);
-    render_ui(session, assets, renderer);
+void render_level_text(const SessionState& session, const Assets& assets, SDL_Renderer* renderer,
+                       const ScreenLayout& layout) {
+    if (session.scene != SceneMode::Battle || session.battle.phase != BattlePhase::LevelIntro ||
+        !assets.ui_font_large) {
+        return;
+    }
+
+    const float t = session.battle.level_text_timer;
+    if (t > LEVEL_TEXT_DURATION) {
+        return;
+    }
+
+    const std::string label = "Level " + std::to_string(session.battle.current_level_index + 1);
+    SDL_Color color{255, 255, 255, 255};
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(assets.ui_font_large, label.c_str(), color);
+    if (!surface) {
+        return;
+    }
+
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    const float width = static_cast<float>(surface->w);
+    const float height = static_cast<float>(surface->h);
+    SDL_FreeSurface(surface);
+    if (!texture) {
+        return;
+    }
+
+    const float fly = ease_out_cubic(clampf(t / LEVEL_TEXT_DURATION, 0.0f, 1.0f));
+    const float wobble = std::sin(t * 8.0f) * 8.0f;
+    const SDL_FRect dst = {
+        layout.scene_rect.x + layout.scene_rect.w * 0.5f - width * 0.5f +
+            std::sin(t * 5.0f) * 10.0f,
+        layout.scene_rect.y + 16.0f + wobble + (1.0f - fly) * 28.0f,
+        width,
+        height,
+    };
+    SDL_RenderCopyF(renderer, texture, nullptr, &dst);
+    SDL_DestroyTexture(texture);
+}
+
+void render_battle_overlay(const SessionState& session, const Assets& assets,
+                           SDL_Renderer* renderer, const ScreenLayout& layout) {
+    SDL_SetRenderDrawColor(renderer, 6, 12, 22, 230);
+    SDL_RenderFillRectF(renderer, &layout.left_panel);
+    SDL_RenderFillRectF(renderer, &layout.right_panel);
+
+    for (int i = 0; i < session.battle.lives; ++i) {
+        draw_ui_sprite(renderer, assets.ships, player_ship_tile_center(0),
+                       layout.left_panel.x + layout.left_panel.w * 0.5f,
+                       layout.left_panel.y + 28.0f + 44.0f * static_cast<float>(i), 3.0f);
+    }
+
+    SDL_Color text = {230, 236, 244, 255};
+    float x = layout.right_panel.x + 10.0f;
+    float y = layout.right_panel.y + 10.0f;
+    draw_text(renderer, assets.ui_font_large,
+              "L" + std::to_string(session.battle.current_level_index + 1), x, y, text);
+    y += 34.0f;
+    draw_text(renderer, assets.ui_font_small, "party: 1", x, y, text);
+    y += 18.0f;
+    draw_text(renderer, assets.ui_font_small, "wingmen: 0", x, y, text);
+    y += 24.0f;
+    draw_text(renderer, assets.ui_font_small, "weapons", x, y, text);
+    y += 18.0f;
+
+    for (std::size_t i = 0; i < session.battle.weapons.size(); ++i) {
+        const Weapon& weapon = session.battle.weapons[i];
+        draw_ui_sprite(renderer, assets.particles, weapon.projectile_tile, x + 8.0f, y + 8.0f,
+                       2.0f);
+        const std::string type = weapon.type == WeaponType::Basic ? "basic" : "missile";
+        std::string fixture = "center";
+        if (weapon.fixture == WeaponFixture::EvenlySpread) {
+            fixture = "even";
+        } else if (weapon.fixture == WeaponFixture::Splayed) {
+            fixture = "splay";
+        }
+        draw_text(renderer, assets.ui_font_small, std::to_string(static_cast<int>(i)) + " " + type,
+                  x + 22.0f, y - 2.0f, text);
+        draw_text(renderer, assets.ui_font_small,
+                  fixture + " p" + std::to_string(weapon.projectile_tile), x + 22.0f, y + 10.0f,
+                  {170, 180, 200, 255});
+        y += 28.0f;
+    }
+
+    render_level_text(session, assets, renderer, layout);
 }
 
 } // namespace
 
-void session_render(const SessionState& session, const Assets& assets, SDL_Renderer* renderer,
-                    Uint64 ticks) {
+ScreenLayout make_screen_layout(int window_width, int window_height) {
+    const float width = static_cast<float>(window_width);
+    const float height = static_cast<float>(window_height);
+    const float integer_scale =
+        std::max(1.0f, std::floor(std::min(width / static_cast<float>(GAME_WIDTH),
+                                           height / static_cast<float>(GAME_HEIGHT))));
+    const float scene_width = static_cast<float>(GAME_WIDTH) * integer_scale;
+    const float scene_height = static_cast<float>(GAME_HEIGHT) * integer_scale;
+    const float scene_x = std::floor((width - scene_width) * 0.5f);
+    const float scene_y = std::floor((height - scene_height) * 0.5f);
+
+    ScreenLayout layout{};
+    layout.scene_rect = {scene_x, scene_y, scene_width, scene_height};
+
+    const SDL_FRect left_outer = {0.0f, 0.0f, std::max(0.0f, scene_x - PANEL_PADDING), height};
+    const SDL_FRect right_outer = {
+        scene_x + scene_width + PANEL_PADDING,
+        0.0f,
+        std::max(0.0f, width - (scene_x + scene_width + PANEL_PADDING)),
+        height,
+    };
+    layout.left_panel = fit_rect_within({left_outer.x + PANEL_PADDING, left_outer.y + PANEL_PADDING,
+                                         std::max(0.0f, left_outer.w - PANEL_PADDING * 2.0f),
+                                         std::max(0.0f, left_outer.h - PANEL_PADDING * 2.0f)},
+                                        0.55f);
+    layout.right_panel =
+        fit_rect_within({right_outer.x + PANEL_PADDING, right_outer.y + PANEL_PADDING,
+                         std::max(0.0f, right_outer.w - PANEL_PADDING * 2.0f),
+                         std::max(0.0f, right_outer.h - PANEL_PADDING * 2.0f)},
+                        0.62f);
+    return layout;
+}
+
+void session_render_scene(const SessionState& session, const Assets& assets, SDL_Renderer* renderer,
+                          Uint64 ticks) {
     if (session.scene == SceneMode::Title) {
-        render_title(assets, renderer, ticks);
+        render_title_scene(assets, renderer, ticks);
         return;
     }
-    render_battle(session, assets, renderer);
+    render_battle_scene(session, assets, renderer);
+}
+
+void session_render_overlay(const SessionState& session, const Assets& assets,
+                            SDL_Renderer* renderer, const ScreenLayout& layout, Uint64 ticks) {
+    (void)ticks;
+    if (session.scene != SceneMode::Battle) {
+        return;
+    }
+    render_battle_overlay(session, assets, renderer, layout);
 }

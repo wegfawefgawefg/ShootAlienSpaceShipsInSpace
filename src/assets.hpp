@@ -15,7 +15,8 @@ struct TextureAtlas {
 };
 
 struct Assets {
-    TTF_Font* ui_font{nullptr};
+    TTF_Font* ui_font_small{nullptr};
+    TTF_Font* ui_font_large{nullptr};
     SDL_Texture* menu_background{nullptr};
     SDL_Texture* menu_title{nullptr};
     TextureAtlas ships{};

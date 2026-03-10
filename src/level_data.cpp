@@ -227,7 +227,7 @@ void seed_default_weapons(BattleState& battle) {
         0.0f,
         1600.0f,
         0.5f,
-        2.0f,
+        1.25f,
         1.0f,
         0.0f,
     });
@@ -240,7 +240,7 @@ void seed_default_weapons(BattleState& battle) {
         0.0f,
         1500.0f,
         0.5f,
-        2.0f,
+        1.25f,
         1.0f,
         12.0f,
     });

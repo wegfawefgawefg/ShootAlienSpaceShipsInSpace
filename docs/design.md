@@ -26,6 +26,9 @@ From here, the C++ version intentionally grows past the Python prototype.
 - Default behavior: centered and floating-friendly for tiling WM setups like i3
 - Keep the retro asset scale and simple sprite rendering
 - Use the starfield warp effect as a transition visual between levels
+- Render the gameplay world to a low-resolution intermediate texture
+- Render the UI directly at full window resolution
+- Keep the world pixelated and the overlay crisp
 
 ## Controls
 
@@ -42,6 +45,7 @@ The player keeps control during level transitions, but shooting is disabled duri
 - The camera should be able to zoom out when the fight gets busy.
 - Camera motion should be smooth, not snapped.
 - UI must stay in screen space and never obstruct the main play area.
+- The current camera should bias toward a slightly more zoomed-out view than the first port pass.
 
 ## Player And Party
 
@@ -103,7 +107,15 @@ Each level begins with a short transition phase:
 - A `Level N` text appears with a strong wiggle / drift.
 - Enemies fly in toward their target formation positions.
 - The starfield ramps into a warp-style effect to imply travel to a new location.
+- `start_warping` should play when the transition begins.
+- `stop_warping` should play when the transition ends and normal combat begins.
 - Once the formation settles and the level text exits, normal combat begins.
+
+Outside transitions, the starfield should return to the slower Python-style feel:
+
+- many stars
+- calmer base drift
+- stronger edge acceleration only when warp ramps up
 
 ## Levels
 
@@ -152,6 +164,21 @@ Enemies also need:
 
 Enemy HP must allow enemies to take more than one hit.
 Hit shake can just be a decaying float that adds random draw offset while active.
+
+Enemies, the player, bullets, and other floating objects can also have a simple height model:
+
+- `base_height`
+- `height`
+- `target_height`
+
+Height can drive:
+
+- shadow offset
+- subtle bobbing
+- impact sag when hit
+- small motion accents during turning / movement
+
+It should always ease back toward a target height instead of snapping.
 
 ## Enemy Behaviors
 
@@ -218,6 +245,8 @@ These are separate from behavior so the same movement logic can support differen
   - particle / projectile type
   - fixture type
 - Show player / party details in the UI
+- UI must fit comfortably in the side panels at full resolution
+- Collider shapes should be smaller than the full `8x8` sprite footprint when appropriate
 
 ## Code Shape
 

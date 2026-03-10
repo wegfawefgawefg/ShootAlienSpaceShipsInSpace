@@ -23,6 +23,9 @@ void spawn_player_bullet(BattleState& battle, const Weapon& weapon, Vec2 spawn_p
         weapon.projectile_radius,
         weapon.damage,
         weapon.projectile_life,
+        3.0f,
+        3.0f,
+        3.0f,
         weapon.projectile_tile,
     });
 }
@@ -69,6 +72,8 @@ void update_player_bullets(BattleState& battle, float dt) {
     for (PlayerBullet& bullet : battle.player_bullets) {
         bullet.age += dt;
         bullet.pos += bullet.vel * dt;
+        bullet.target_height = bullet.base_height + std::sin(bullet.age * 18.0f) * 0.2f;
+        bullet.height += (bullet.target_height - bullet.height) * std::min(1.0f, dt * 10.0f);
     }
 
     battle.player_bullets.erase(

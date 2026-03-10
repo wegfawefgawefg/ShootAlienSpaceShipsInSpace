@@ -35,6 +35,9 @@ void spawn_explosion(BattleState& battle, Vec2 pos, int count) {
             {std::cos(angle) * speed, std::sin(angle) * speed},
             0.0f,
             PARTICLE_LIFE * random_range(0.8f, 1.2f),
+            random_range(0.8f, 1.4f),
+            random_range(0.8f, 1.4f),
+            random_range(0.8f, 1.4f),
             24 + random_index(6),
         });
     }
@@ -62,6 +65,8 @@ void update_enemy_bullets(BattleState& battle, float dt) {
     for (EnemyBullet& bullet : battle.enemy_bullets) {
         bullet.age += dt;
         bullet.pos += bullet.vel * dt;
+        bullet.target_height = bullet.base_height + std::sin(bullet.age * 16.0f) * 0.18f;
+        bullet.height += (bullet.target_height - bullet.height) * std::min(1.0f, dt * 10.0f);
     }
 
     battle.enemy_bullets.erase(
@@ -79,6 +84,9 @@ void update_particles(BattleState& battle, float dt) {
         particle.age += dt;
         particle.pos += particle.vel * dt;
         particle.vel = particle.vel * 0.98f;
+        particle.target_height =
+            std::max(0.2f, particle.base_height * (1.0f - particle.age / particle.life));
+        particle.height += (particle.target_height - particle.height) * std::min(1.0f, dt * 12.0f);
     }
 
     battle.particles.erase(

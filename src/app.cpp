@@ -14,6 +14,17 @@ float frame_dt(Uint64 previous, Uint64 current) {
     return static_cast<float>(current - previous) / static_cast<float>(freq);
 }
 
+bool create_scene_target(App& app) {
+    app.scene_target = SDL_CreateTexture(app.renderer, SDL_PIXELFORMAT_RGBA8888,
+                                         SDL_TEXTUREACCESS_TARGET, GAME_WIDTH, GAME_HEIGHT);
+    if (!app.scene_target) {
+        SDL_Log("SDL_CreateTexture(scene_target) failed: %s", SDL_GetError());
+        return false;
+    }
+    SDL_SetTextureBlendMode(app.scene_target, SDL_BLENDMODE_BLEND);
+    return true;
+}
+
 } // namespace
 
 bool app_init(App& app) {
@@ -57,8 +68,11 @@ bool app_init(App& app) {
     }
 
     SDL_SetWindowPosition(app.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-    SDL_RenderSetLogicalSize(app.renderer, GAME_WIDTH, GAME_HEIGHT);
     SDL_ShowCursor(SDL_DISABLE);
+
+    if (!create_scene_target(app)) {
+        return false;
+    }
 
     if (!assets_load(app.assets, app.renderer)) {
         return false;
@@ -81,7 +95,20 @@ void app_run(App& app) {
         app.last_counter = current_counter;
 
         session_update(app.session, app.assets, dt);
-        session_render(app.session, app.assets, app.renderer, SDL_GetTicks64());
+
+        int window_width = WINDOW_WIDTH;
+        int window_height = WINDOW_HEIGHT;
+        SDL_GetRendererOutputSize(app.renderer, &window_width, &window_height);
+        const ScreenLayout layout = make_screen_layout(window_width, window_height);
+
+        SDL_SetRenderTarget(app.renderer, app.scene_target);
+        session_render_scene(app.session, app.assets, app.renderer, SDL_GetTicks64());
+
+        SDL_SetRenderTarget(app.renderer, nullptr);
+        SDL_SetRenderDrawColor(app.renderer, 0, 0, 0, 255);
+        SDL_RenderClear(app.renderer);
+        SDL_RenderCopyF(app.renderer, app.scene_target, nullptr, &layout.scene_rect);
+        session_render_overlay(app.session, app.assets, app.renderer, layout, SDL_GetTicks64());
         SDL_RenderPresent(app.renderer);
     }
 }
@@ -89,6 +116,10 @@ void app_run(App& app) {
 void app_shutdown(App& app) {
     assets_unload(app.assets);
 
+    if (app.scene_target) {
+        SDL_DestroyTexture(app.scene_target);
+        app.scene_target = nullptr;
+    }
     if (app.renderer) {
         SDL_DestroyRenderer(app.renderer);
         app.renderer = nullptr;

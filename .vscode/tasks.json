@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cmake: configure (dev)",
+      "type": "shell",
+      "command": "cmake --preset dev",
+      "problemMatcher": ["$gcc", "$msCompile"],
+      "group": "build"
+    },
+    {
+      "label": "cmake: build (dev)",
+      "type": "shell",
+      "command": "cmake --build --preset dev",
+      "problemMatcher": ["$gcc", "$msCompile"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "dependsOn": ["cmake: configure (dev)"]
+    },
+    {
+      "label": "run sassis",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/run.sh",
+      "dependsOn": ["cmake: build (dev)"]
+    }
+  ]
+}

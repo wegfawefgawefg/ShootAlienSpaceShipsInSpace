@@ -175,6 +175,36 @@ Current implemented slice:
 - active weapon selling and stash refill
 - inventory inspection while in combat or shop
 
+## Debug Capture Plan
+
+For further UI and gameplay tuning, add a CLI-driven debug bootstrap path instead of relying on
+manual play to reach a useful state.
+
+Desired tooling:
+
+- launch directly into seeded battle / inventory / shop snapshots from the CLI
+- use deterministic seeded state so comparisons are stable
+- dump a PNG of the current frame to disk for inspection
+- support a few canned snapshots:
+  - early run
+  - overloaded late run
+  - shop state
+  - boss/combat state
+
+This is mainly for closing the tuning loop faster when adjusting:
+
+- UI layout
+- shop card readability
+- inventory readability
+- gameplay presentation
+- camera / effects polish
+
+## Next Tuning Pass
+
+- add more charge/spool weapons or beam visual polish
+- tune rarity/shop weighting now that the pool is broader
+- tune the new grammars so they feel distinct and not over/underpowered
+
 Hardcoded C++ data is fine for now. JSON is optional later if it becomes useful.
 
 ## Enemy Model

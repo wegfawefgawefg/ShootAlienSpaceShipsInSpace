@@ -89,6 +89,8 @@ void reset_battle(BattleState& battle, Assets& assets) {
     battle.pickup_magnet_radius = 22.0f;
     battle.camera_shake_scale = 1.0f;
     battle.projectile_speed_scale = 1.0f;
+    battle.gold = 0;
+    battle.gold_gain_flash = 0.0f;
     battle.player_active = true;
     battle.lives = 3;
     battle.hitstop_frames = 0;
@@ -96,6 +98,7 @@ void reset_battle(BattleState& battle, Assets& assets) {
     battle.inventory_selection = 0;
     battle.particles.clear();
     battle.pickups.clear();
+    battle.gold_pickups.clear();
     battle.collected_pickups.clear();
     seed_default_weapons(battle);
     populate_starfield(battle);
@@ -308,6 +311,10 @@ void session_update(SessionState& session, Assets& assets, float dt) {
         const bool timer_expired =
             session.battle.wave_has_timer && session.battle.wave_timer <= 0.0f;
         if (wave_done || timer_expired) {
+            if (wave_done && session.battle.wave_has_timer) {
+                session.battle.gold += static_cast<int>(std::ceil(session.battle.wave_timer)) * 2;
+                session.battle.gold_gain_flash = 1.0f;
+            }
             if (!spawn_next_wave(session.battle)) {
                 begin_level_transition(session.battle, assets,
                                        (session.battle.current_level_index + 1) %

@@ -252,6 +252,7 @@ const std::vector<LevelDef>& levels() {
 void seed_default_weapons(BattleState& battle) {
     battle.weapons.clear();
     battle.weapons.push_back({
+        "Starter Blaster",
         WeaponType::Basic,
         WeaponFixture::Center,
         false,
@@ -264,8 +265,10 @@ void seed_default_weapons(BattleState& battle) {
         1.25f,
         1.0f,
         0.0f,
+        {},
     });
     battle.weapons.push_back({
+        "Starter Fan",
         WeaponType::Basic,
         WeaponFixture::Splayed,
         false,
@@ -278,5 +281,6 @@ void seed_default_weapons(BattleState& battle) {
         1.25f,
         1.0f,
         12.0f,
+        {},
     });
 }

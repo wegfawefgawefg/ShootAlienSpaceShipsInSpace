@@ -10,6 +10,7 @@
 namespace {
 
 constexpr float PICKUP_MAX_AGE = 18.0f;
+constexpr float GOLD_MAX_AGE = 16.0f;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -57,6 +58,10 @@ void remember_pickup(BattleState& battle, int def_index) {
     }
 }
 
+void attach_pickup_to_weapon(Weapon& weapon, int def_index) {
+    weapon.attached_pickups.push_back(def_index);
+}
+
 void apply_pickup(BattleState& battle, int def_index) {
     const PickupDef& def = pickup_def(def_index);
     switch (def.effect) {
@@ -71,6 +76,7 @@ void apply_pickup(BattleState& battle, int def_index) {
             Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
             weapon.cooldown = std::max(0.03f, weapon.cooldown * def.scalar_a);
             weapon.damage *= def.scalar_b;
+            attach_pickup_to_weapon(weapon, def_index);
         }
         break;
     }
@@ -80,6 +86,7 @@ void apply_pickup(BattleState& battle, int def_index) {
             Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
             weapon.damage *= def.scalar_a;
             weapon.cooldown *= def.scalar_b;
+            attach_pickup_to_weapon(weapon, def_index);
         }
         break;
     }
@@ -90,6 +97,7 @@ void apply_pickup(BattleState& battle, int def_index) {
             weapon.automatic = true;
             weapon.damage *= def.scalar_a;
             weapon.cooldown = std::max(0.04f, weapon.cooldown * 0.88f);
+            attach_pickup_to_weapon(weapon, def_index);
         }
         break;
     }
@@ -103,6 +111,7 @@ void apply_pickup(BattleState& battle, int def_index) {
             if (weapon.fixture == WeaponFixture::Center) {
                 weapon.fixture = WeaponFixture::Splayed;
             }
+            attach_pickup_to_weapon(weapon, def_index);
         }
         break;
     }
@@ -147,7 +156,34 @@ void maybe_spawn_enemy_drop(BattleState& battle, const Enemy& enemy) {
     battle.pickups.push_back(pickup);
 }
 
+void maybe_spawn_enemy_gold(BattleState& battle, const Enemy& enemy, bool on_death) {
+    int drops = 0;
+    if (on_death) {
+        drops = enemy.is_boss ? 8 : std::max(1, static_cast<int>(std::ceil(enemy.max_hp * 0.7f)));
+    } else if (enemy.max_hp >= 4.0f && random_unit() < 0.16f) {
+        drops = 1;
+    }
+
+    for (int i = 0; i < drops; ++i) {
+        const bool large = enemy.is_boss && (i % 3 == 0);
+        const bool medium = !large && (enemy.max_hp >= 2.5f || random_unit() < 0.35f);
+        GoldActor gold{};
+        gold.pos = enemy.pos;
+        gold.vel = {random_range(-28.0f, 28.0f), random_range(-34.0f, -8.0f)};
+        gold.guide_target = pickup_safe_target(enemy.pos);
+        gold.value = large ? 9 : (medium ? 3 : 1);
+        gold.tile = large ? 2 : (medium ? 1 : 0);
+        gold.guided = !is_pickup_in_safe_band(enemy.pos);
+        gold.base_height = 1.2f + static_cast<float>(gold.tile) * 0.35f;
+        gold.height = gold.base_height;
+        gold.target_height = gold.base_height;
+        battle.gold_pickups.push_back(gold);
+    }
+}
+
 void update_pickups(BattleState& battle, Assets& assets, float dt) {
+    battle.gold_gain_flash = std::max(0.0f, battle.gold_gain_flash - dt * 2.5f);
+
     for (PickupActor& pickup : battle.pickups) {
         pickup.age += dt;
         pickup.target_height = pickup.base_height + std::sin(pickup.age * 7.0f) * 0.4f;
@@ -196,6 +232,57 @@ void update_pickups(BattleState& battle, Assets& assets, float dt) {
         const bool expired = pickup.age > PICKUP_MAX_AGE || pickup.pos.y > GAME_HEIGHT + 28.0f;
         if (collected || expired) {
             battle.pickups.erase(battle.pickups.begin() + static_cast<std::ptrdiff_t>(i));
+            continue;
+        }
+        ++i;
+    }
+
+    for (GoldActor& gold : battle.gold_pickups) {
+        gold.age += dt;
+        gold.target_height = gold.base_height + std::sin(gold.age * 8.0f) * 0.25f;
+        gold.height += (gold.target_height - gold.height) * std::min(1.0f, dt * 8.0f);
+
+        const bool can_magnet =
+            battle.player_active && vec2_length_sq(battle.ship.pos - gold.pos) <=
+                                        battle.pickup_magnet_radius * battle.pickup_magnet_radius;
+
+        if (can_magnet) {
+            const Vec2 delta = battle.ship.pos - gold.pos;
+            const float len = std::max(vec2_length(delta), 0.001f);
+            const Vec2 dir = {delta.x / len, delta.y / len};
+            gold.vel += (dir * 280.0f - gold.vel) * std::min(1.0f, dt * 10.0f);
+        } else if (gold.guided) {
+            const Vec2 delta = gold.guide_target - gold.pos;
+            if (vec2_length_sq(delta) < 36.0f) {
+                gold.guided = false;
+            } else {
+                const float len = std::max(vec2_length(delta), 0.001f);
+                const Vec2 dir = {delta.x / len, delta.y / len};
+                gold.vel += (dir * 96.0f - gold.vel) * std::min(1.0f, dt * 4.0f);
+            }
+        } else {
+            const Vec2 drift = {std::sin(gold.age * 3.0f) * 8.0f, 22.0f};
+            gold.vel += (drift - gold.vel) * std::min(1.0f, dt * 2.0f);
+        }
+
+        gold.pos += gold.vel * dt;
+    }
+
+    for (std::size_t i = 0; i < battle.gold_pickups.size();) {
+        GoldActor& gold = battle.gold_pickups[i];
+        bool collected = false;
+        if (battle.player_active) {
+            const float radius = gold.radius + battle.ship.radius + 2.0f;
+            if (vec2_length_sq(battle.ship.pos - gold.pos) <= radius * radius) {
+                battle.gold += gold.value;
+                battle.gold_gain_flash = 1.0f;
+                collected = true;
+            }
+        }
+
+        const bool expired = gold.age > GOLD_MAX_AGE || gold.pos.y > GAME_HEIGHT + 28.0f;
+        if (collected || expired) {
+            battle.gold_pickups.erase(battle.gold_pickups.begin() + static_cast<std::ptrdiff_t>(i));
             continue;
         }
         ++i;

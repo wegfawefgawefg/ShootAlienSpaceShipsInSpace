@@ -132,8 +132,10 @@ void resolve_damage(BattleState& battle, Assets& assets) {
                 enemy.shake = enemy.is_boss ? 6.0f : 5.0f;
                 enemy.target_height = enemy.base_height - 1.0f;
                 add_hitstop(battle, enemy.is_boss ? 3 : 2);
+                maybe_spawn_enemy_gold(battle, enemy, false);
                 if (enemy.hp <= 0.0f) {
                     spawn_explosion(battle, enemy.pos, 10);
+                    maybe_spawn_enemy_gold(battle, enemy, true);
                     maybe_spawn_enemy_drop(battle, enemy);
                     dead = true;
                 }

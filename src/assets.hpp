@@ -25,6 +25,7 @@ struct Assets {
     SDL_Texture* menu_title{nullptr};
     TextureAtlas ships{};
     TextureAtlas particles{};
+    TextureAtlas coins{};
 
     std::array<Mix_Chunk*, 3> laser_sounds{};
     std::array<Mix_Chunk*, 3> rock_hit_sounds{};

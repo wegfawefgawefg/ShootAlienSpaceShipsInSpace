@@ -238,6 +238,10 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         draw_world_shadow(renderer, assets.particles, def.icon_tile, session.battle.camera,
                           pickup.pos, pickup.height, 0.0f, 1.2f);
     }
+    for (const GoldActor& gold : session.battle.gold_pickups) {
+        draw_world_shadow(renderer, assets.coins, gold.tile, session.battle.camera, gold.pos,
+                          gold.height, 0.0f, 1.0f);
+    }
 
     if (session.battle.player_active) {
         int ship_tile = player_ship_tile_center(0);
@@ -275,6 +279,11 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         draw_world_sprite(renderer, assets.particles, def.icon_tile, session.battle.camera,
                           pickup.pos, 0.0f, {0.0f, 0.0f}, pulse);
     }
+    for (const GoldActor& gold : session.battle.gold_pickups) {
+        const float pulse = 1.0f + std::sin(gold.age * 10.0f) * 0.06f;
+        draw_world_sprite(renderer, assets.coins, gold.tile, session.battle.camera, gold.pos, 0.0f,
+                          {0.0f, 0.0f}, pulse);
+    }
 
     const bool hidden_for_blink = session.battle.invuln_timer > 0.0f &&
                                   std::fmod(session.battle.invuln_timer * 20.0f, 2.0f) < 1.0f;
@@ -307,6 +316,10 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         for (const PickupActor& pickup : session.battle.pickups) {
             draw_debug_box(renderer, session.battle.camera, pickup.pos, pickup.radius,
                            {255, 128, 255, 180});
+        }
+        for (const GoldActor& gold : session.battle.gold_pickups) {
+            draw_debug_box(renderer, session.battle.camera, gold.pos, gold.radius,
+                           {255, 220, 80, 180});
         }
         if (session.battle.player_active) {
             draw_debug_box(renderer, session.battle.camera, session.battle.ship.pos,
@@ -366,6 +379,8 @@ struct InventoryEntry {
     std::string detail{};
     std::string desc{};
     int icon_tile{0};
+    int weapon_index{-1};
+    int pickup_def_index{-1};
 };
 
 struct InventoryRow {
@@ -413,7 +428,7 @@ std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
         const Weapon& weapon = battle.weapons[i];
         InventoryEntry entry{};
         entry.section = "Weapons";
-        entry.name = std::to_string(static_cast<int>(i + 1)) + ". " + weapon_type_name(weapon.type);
+        entry.name = std::to_string(static_cast<int>(i + 1)) + ". " + weapon.name;
         entry.subtitle =
             std::string(fixture_name(weapon.fixture)) + (weapon.automatic ? " auto" : " semi");
         entry.detail = "dmg " + std::to_string(weapon.damage).substr(0, 4) + " cd " +
@@ -423,6 +438,7 @@ std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
                      std::to_string(weapon.projectile_life).substr(0, 4) + " rad " +
                      std::to_string(weapon.projectile_radius).substr(0, 4);
         entry.icon_tile = weapon.projectile_tile;
+        entry.weapon_index = static_cast<int>(i);
         rows.push_back({true, {}, entry});
     }
 
@@ -436,6 +452,7 @@ std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
         entry.detail = def.desc;
         entry.desc = "Affects existing guns.";
         entry.icon_tile = def.icon_tile;
+        entry.pickup_def_index = def_index;
         rows.push_back({true, {}, entry});
     }
 
@@ -449,6 +466,7 @@ std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
         entry.detail = def.desc;
         entry.desc = "Run-wide ship effect.";
         entry.icon_tile = def.icon_tile;
+        entry.pickup_def_index = def_index;
         rows.push_back({true, {}, entry});
     }
 
@@ -581,10 +599,50 @@ void render_inventory_overlay(const SessionState& session, const Assets& assets,
                   detail_panel.y + 40.0f, primary);
         draw_text(renderer, assets.ui_font_small, selected->section + " / " + selected->subtitle,
                   detail_panel.x + 12.0f, detail_panel.y + 76.0f, accent);
-        draw_text(renderer, assets.ui_font_small, selected->detail, detail_panel.x + 12.0f,
-                  detail_panel.y + 104.0f, primary);
-        draw_text(renderer, assets.ui_font_small, selected->desc, detail_panel.x + 12.0f,
-                  detail_panel.y + 126.0f, secondary);
+        float detail_y = detail_panel.y + 108.0f;
+        if (selected->weapon_index >= 0) {
+            const Weapon& weapon =
+                session.battle.weapons[static_cast<std::size_t>(selected->weapon_index)];
+            const std::array<std::string, 8> lines = {
+                "Type: " + std::string(weapon_type_name(weapon.type)),
+                "Trigger: " + std::string(weapon.automatic ? "Automatic" : "Semi-auto"),
+                "Fixture: " + std::string(fixture_name(weapon.fixture)),
+                "Damage: " + std::to_string(weapon.damage).substr(0, 5),
+                "Cooldown: " + std::to_string(weapon.cooldown).substr(0, 5),
+                "Projectile Count: " + std::to_string(weapon.projectile_count),
+                "Projectile Speed: " + std::to_string(static_cast<int>(weapon.projectile_speed)),
+                "Projectile Life: " + std::to_string(weapon.projectile_life).substr(0, 5),
+            };
+            for (const std::string& line : lines) {
+                draw_text(renderer, assets.ui_font_small, line, detail_panel.x + 12.0f, detail_y,
+                          primary);
+                detail_y += 18.0f;
+            }
+            draw_text(renderer, assets.ui_font_small,
+                      "Projectile Radius: " + std::to_string(weapon.projectile_radius).substr(0, 5),
+                      detail_panel.x + 12.0f, detail_y, primary);
+            detail_y += 24.0f;
+            draw_text(renderer, assets.ui_font_small, "Attached Upgrades", detail_panel.x + 12.0f,
+                      detail_y, accent);
+            detail_y += 18.0f;
+            if (weapon.attached_pickups.empty()) {
+                draw_text(renderer, assets.ui_font_small, "None", detail_panel.x + 12.0f, detail_y,
+                          secondary);
+            } else {
+                for (int def_index : weapon.attached_pickups) {
+                    const PickupDef& def = pickup_def(def_index);
+                    draw_text(renderer, assets.ui_font_small, "- " + def.name,
+                              detail_panel.x + 12.0f, detail_y, primary);
+                    detail_y += 18.0f;
+                }
+            }
+        } else {
+            draw_text(renderer, assets.ui_font_small, selected->detail, detail_panel.x + 12.0f,
+                      detail_y, primary);
+            detail_y += 22.0f;
+            draw_text(renderer, assets.ui_font_small, selected->desc, detail_panel.x + 12.0f,
+                      detail_y, secondary);
+        }
     }
 }
 
@@ -607,11 +665,18 @@ void render_battle_overlay(const SessionState& session, const Assets& assets,
 
     SDL_Color primary{232, 238, 246, 255};
     SDL_Color secondary{168, 182, 200, 255};
+    SDL_Color accent{255, 214, 128, 255};
     float x = layout.right_panel.x + 10.0f;
     float y = layout.right_panel.y + 10.0f;
     draw_text(renderer, assets.ui_font_large,
               "L" + std::to_string(session.battle.current_level_index + 1), x, y, primary);
     y += 32.0f;
+    const SDL_Color gold_color =
+        session.battle.gold_gain_flash > 0.0f ? SDL_Color{255, 240, 128, 255} : accent;
+    draw_ui_sprite(renderer, assets.coins, 1, x + 8.0f, y + 8.0f, 1.8f);
+    draw_text(renderer, assets.ui_font_small, "gold " + std::to_string(session.battle.gold),
+              x + 18.0f, y - 2.0f, gold_color);
+    y += 20.0f;
     draw_text(renderer, assets.ui_font_small,
               "wave " + std::to_string(session.battle.current_wave_index + 1), x, y, primary);
     y += 16.0f;
@@ -653,9 +718,9 @@ void render_battle_overlay(const SessionState& session, const Assets& assets,
         } else if (weapon.fixture == WeaponFixture::Splayed) {
             fixture = "splay";
         }
-        const std::string type = weapon.type == WeaponType::Basic ? "basic" : "missile";
-        draw_text(renderer, assets.ui_font_small, std::to_string(static_cast<int>(i)) + " " + type,
-                  x + 18.0f, y - 2.0f, primary);
+        draw_text(renderer, assets.ui_font_small,
+                  std::to_string(static_cast<int>(i)) + " " + weapon.name, x + 18.0f, y - 2.0f,
+                  primary);
         draw_text(renderer, assets.ui_font_small, fixture + (weapon.automatic ? " auto" : " semi"),
                   x + 18.0f, y + 10.0f, secondary);
         y += 26.0f;

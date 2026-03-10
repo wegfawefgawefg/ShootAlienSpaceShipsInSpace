@@ -167,9 +167,15 @@ bool assets_load(Assets& assets, SDL_Renderer* renderer) {
     assets.particles.rows = 10;
     assets.particles.tile_width = 8;
     assets.particles.tile_height = 8;
+    assets.coins.columns = 3;
+    assets.coins.rows = 1;
+    assets.coins.tile_width = 8;
+    assets.coins.tile_height = 8;
 
-    const bool atlases_ok = load_texture_atlas(renderer, "assets/ships.png", assets.ships) &&
-                            load_texture_atlas(renderer, "assets/particles.png", assets.particles);
+    const bool atlases_ok =
+        load_texture_atlas(renderer, "assets/ships.png", assets.ships) &&
+        load_texture_atlas(renderer, "assets/particles.png", assets.particles) &&
+        load_texture_atlas(renderer, "assets/coins.png", assets.coins);
 
     const bool textures_ok = assets.ui_font_small && assets.ui_font_large &&
                              assets.menu_background && assets.menu_title && atlases_ok;
@@ -227,6 +233,7 @@ void assets_unload(Assets& assets) {
     destroy_texture(assets.menu_title);
     destroy_texture(assets.ships.texture);
     destroy_texture(assets.particles.texture);
+    destroy_texture(assets.coins.texture);
     if (assets.ui_font_small) {
         TTF_CloseFont(assets.ui_font_small);
         assets.ui_font_small = nullptr;

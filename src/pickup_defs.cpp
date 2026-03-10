@@ -12,8 +12,9 @@ float random_unit() {
 Weapon make_weapon(WeaponType type, WeaponFixture fixture, bool automatic, int projectile_tile,
                    int projectile_count, float cooldown, float projectile_speed,
                    float projectile_life, float projectile_radius, float damage,
-                   float spread_degrees) {
+                   float spread_degrees, const char* name) {
     Weapon weapon{};
+    weapon.name = name;
     weapon.type = type;
     weapon.fixture = fixture;
     weapon.automatic = automatic;
@@ -26,6 +27,7 @@ Weapon make_weapon(WeaponType type, WeaponFixture fixture, bool automatic, int p
     weapon.projectile_radius = projectile_radius;
     weapon.damage = damage;
     weapon.spread_degrees = spread_degrees;
+    weapon.attached_pickups.clear();
     return weapon;
 }
 
@@ -38,7 +40,7 @@ const std::vector<PickupDef> kPickupDefs = {
         PickupTier::Common,
         PickupEffectType::GrantWeapon,
         make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 1, 1, 0.16f, 1500.0f, 0.5f,
-                    1.25f, 1.0f, 0.0f),
+                    1.25f, 1.0f, 0.0f, "Twin Blaster"),
     },
     {
         "needle_cannon",
@@ -48,7 +50,7 @@ const std::vector<PickupDef> kPickupDefs = {
         PickupTier::Uncommon,
         PickupEffectType::GrantWeapon,
         make_weapon(WeaponType::Basic, WeaponFixture::Center, true, 3, 1, 0.06f, 1750.0f, 0.4f,
-                    1.0f, 0.55f, 0.0f),
+                    1.0f, 0.55f, 0.0f, "Needle Cannon"),
     },
     {
         "sidecar_spread",
@@ -58,7 +60,7 @@ const std::vector<PickupDef> kPickupDefs = {
         PickupTier::Common,
         PickupEffectType::GrantWeapon,
         make_weapon(WeaponType::Basic, WeaponFixture::EvenlySpread, false, 5, 3, 0.20f, 1450.0f,
-                    0.52f, 1.15f, 0.6f, 0.0f),
+                    0.52f, 1.15f, 0.6f, 0.0f, "Sidecar Spread"),
     },
     {
         "missile_pod",
@@ -68,7 +70,7 @@ const std::vector<PickupDef> kPickupDefs = {
         PickupTier::Rare,
         PickupEffectType::GrantWeapon,
         make_weapon(WeaponType::Missile, WeaponFixture::Center, false, 15, 1, 0.45f, 920.0f, 0.9f,
-                    1.75f, 2.8f, 0.0f),
+                    1.75f, 2.8f, 0.0f, "Missile Pod"),
     },
     {
         "prism_fan",
@@ -78,7 +80,7 @@ const std::vector<PickupDef> kPickupDefs = {
         PickupTier::Uncommon,
         PickupEffectType::GrantWeapon,
         make_weapon(WeaponType::Basic, WeaponFixture::Splayed, false, 9, 3, 0.28f, 1480.0f, 0.52f,
-                    1.15f, 0.7f, 12.0f),
+                    1.15f, 0.7f, 12.0f, "Prism Fan"),
     },
     {
         "heavy_lance",
@@ -88,7 +90,7 @@ const std::vector<PickupDef> kPickupDefs = {
         PickupTier::Uncommon,
         PickupEffectType::GrantWeapon,
         make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 12, 1, 0.32f, 1700.0f, 0.6f,
-                    1.45f, 2.0f, 0.0f),
+                    1.45f, 2.0f, 0.0f, "Heavy Lance"),
     },
     {
         "hair_trigger",

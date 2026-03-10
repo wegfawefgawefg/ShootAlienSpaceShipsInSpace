@@ -53,6 +53,7 @@ enum class WeaponFixture {
 };
 
 struct Weapon {
+    std::string name{"Weapon"};
     WeaponType type{WeaponType::Basic};
     WeaponFixture fixture{WeaponFixture::Center};
     bool automatic{false};
@@ -65,6 +66,7 @@ struct Weapon {
     float projectile_radius{1.25f};
     float damage{1.0f};
     float spread_degrees{14.0f};
+    std::vector<int> attached_pickups{};
 };
 
 struct CameraState {
@@ -183,6 +185,20 @@ struct PickupActor {
     bool guided{true};
 };
 
+struct GoldActor {
+    Vec2 pos{};
+    Vec2 vel{};
+    Vec2 guide_target{};
+    float age{0.0f};
+    float radius{5.0f};
+    float base_height{1.6f};
+    float height{1.6f};
+    float target_height{1.6f};
+    int value{1};
+    int tile{0};
+    bool guided{true};
+};
+
 struct LevelSpawnDef {
     int type_id{0};
     EnemyBehavior behavior{EnemyBehavior::Straight};
@@ -218,6 +234,7 @@ struct BattleState {
     std::vector<Enemy> enemies{};
     std::vector<Particle> particles{};
     std::vector<PickupActor> pickups{};
+    std::vector<GoldActor> gold_pickups{};
     std::vector<Star> stars{};
     std::vector<int> collected_pickups{};
     CameraState camera{};
@@ -225,6 +242,7 @@ struct BattleState {
     float level_timer{0.0f};
     float level_text_timer{0.0f};
     float wave_timer{0.0f};
+    float gold_gain_flash{0.0f};
     float respawn_timer{0.0f};
     float invuln_timer{0.0f};
     float pickup_magnet_radius{22.0f};
@@ -241,6 +259,8 @@ struct BattleState {
     int active_wave_tag{0};
     int hitstop_frames{0};
     int inventory_selection{0};
+    int gold{0};
+    int weapon_slots{5};
     BattlePhase phase{BattlePhase::LevelIntro};
     std::array<int, 2> music_channels{{-1, -1}};
 };

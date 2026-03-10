@@ -134,6 +134,29 @@ This matters because an item like `Auto Retrofit` should not just show up global
 - what changed on that weapon
 - what the current derived numbers are
 
+### Weapon Slots And Stash
+
+Probable direction:
+
+- active weapon slots are limited
+- starting limit may be `5`
+- extra owned weapons can live in a stash
+- stash size can also be limited
+- if both active slots and stash are full, some pickups should be skipped instead of becoming free sell fodder
+
+This would create more meaningful shop decisions:
+
+- buy now
+- stash for later
+- replace an active weapon
+- sell / scrap an old weapon
+
+Not all upgrades should require manual application, but many should eventually support:
+
+- auto-apply now
+- choose target weapon
+- stash for later use
+
 ### Fixture Types
 
 - `center`

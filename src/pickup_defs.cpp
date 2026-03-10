@@ -27,6 +27,60 @@ Weapon make_weapon(WeaponType type, WeaponFixture fixture, bool automatic, int p
     weapon.projectile_radius = projectile_radius;
     weapon.damage = damage;
     weapon.spread_degrees = spread_degrees;
+    weapon.pierce = 0;
+    weapon.ricochet = 0;
+    weapon.homing_turn = 0.0f;
+    weapon.wave_amplitude = 0.0f;
+    weapon.wave_frequency = 0.0f;
+    weapon.stop_age = 0.0f;
+    weapon.explosion_radius = 0.0f;
+    weapon.burst_count = 1;
+    weapon.burst_interval = 0.0f;
+    weapon.burst_remaining = 0;
+    weapon.burst_timer = 0.0f;
+    weapon.beam_duration = 0.0f;
+    weapon.beam_width = 0.0f;
+    weapon.beam_length = 0.0f;
+    weapon.beam_tick_interval = 0.0f;
+    weapon.orbital_count = 0;
+    weapon.orbital_radius = 0.0f;
+    weapon.orbital_speed = 0.0f;
+    weapon.orbital_duration = 0.0f;
+    switch (type) {
+    case WeaponType::Missile:
+        weapon.homing_turn = 12.0f;
+        weapon.explosion_radius = 13.0f;
+        break;
+    case WeaponType::Rail:
+        weapon.pierce = 4;
+        break;
+    case WeaponType::Arc:
+        weapon.wave_amplitude = 250.0f;
+        weapon.wave_frequency = 16.0f;
+        break;
+    case WeaponType::Mine:
+        weapon.stop_age = 0.16f;
+        weapon.explosion_radius = 18.0f;
+        break;
+    case WeaponType::Burst:
+        weapon.burst_count = 3;
+        weapon.burst_interval = 0.045f;
+        break;
+    case WeaponType::Beam:
+        weapon.beam_duration = 0.16f;
+        weapon.beam_width = 6.0f;
+        weapon.beam_length = 180.0f;
+        weapon.beam_tick_interval = 0.04f;
+        break;
+    case WeaponType::Orbital:
+        weapon.orbital_count = 2;
+        weapon.orbital_radius = 18.0f;
+        weapon.orbital_speed = 160.0f;
+        weapon.orbital_duration = 4.0f;
+        break;
+    case WeaponType::Basic:
+        break;
+    }
     weapon.attached_pickups.clear();
     return weapon;
 }
@@ -173,6 +227,233 @@ const std::vector<PickupDef> kPickupDefs = {
                     1.0f, 0.45f, 0.0f, "Chain Gun"),
     },
     {
+        "ricochet_blaster",
+        "Ricochet Blaster",
+        "Fast rounds that bank off side walls.",
+        20,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon =
+                make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 20, 1, 0.16f, 1580.0f,
+                            0.8f, 1.1f, 0.82f, 0.0f, "Ricochet Blaster");
+            weapon.ricochet = 2;
+            return weapon;
+        }(),
+    },
+    {
+        "hunter_rounds",
+        "Hunter Rounds",
+        "A basic gun with slight target tracking.",
+        21,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Basic, WeaponFixture::Center, true, 21, 1,
+                                        0.10f, 1460.0f, 0.55f, 1.0f, 0.62f, 0.0f, "Hunter Rounds");
+            weapon.homing_turn = 4.5f;
+            return weapon;
+        }(),
+    },
+    {
+        "bombard_shot",
+        "Bombard Shot",
+        "Slow explosive slugs with no spread.",
+        22,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 22, 1,
+                                        0.36f, 980.0f, 0.9f, 1.5f, 1.8f, 0.0f, "Bombard Shot");
+            weapon.explosion_radius = 11.0f;
+            return weapon;
+        }(),
+    },
+    {
+        "pulse_drill",
+        "Pulse Drill",
+        "Three piercing slugs with a tight fan.",
+        23,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Basic, WeaponFixture::Splayed, false, 23, 3,
+                                        0.24f, 1720.0f, 0.55f, 1.0f, 0.85f, 7.0f, "Pulse Drill");
+            weapon.pierce = 1;
+            return weapon;
+        }(),
+    },
+    {
+        "seeker_fan",
+        "Seeker Fan",
+        "A three-missile fan that tracks into the lane.",
+        24,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Missile, WeaponFixture::Splayed, false, 24, 3, 0.62f, 820.0f, 1.1f,
+                    1.2f, 1.0f, 12.0f, "Seeker Fan"),
+    },
+    {
+        "skipshot_array",
+        "Skipshot Array",
+        "Three side-spaced bullets that bank off walls.",
+        25,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Basic, WeaponFixture::EvenlySpread, true, 25, 3,
+                                        0.14f, 1480.0f, 0.9f, 0.95f, 0.48f, 0.0f, "Skipshot Array");
+            weapon.ricochet = 1;
+            return weapon;
+        }(),
+    },
+    {
+        "tunnel_lance",
+        "Tunnel Lance",
+        "A slow drill shot that bores through targets.",
+        26,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 26, 1,
+                                        0.30f, 1400.0f, 0.7f, 1.5f, 2.3f, 0.0f, "Tunnel Lance");
+            weapon.pierce = 3;
+            return weapon;
+        }(),
+    },
+    {
+        "mine_halo",
+        "Mine Halo",
+        "A splayed three-mine curtain for area denial.",
+        27,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Mine, WeaponFixture::Splayed, false, 27, 3, 0.70f, 500.0f, 1.6f,
+                    1.5f, 1.3f, 14.0f, "Mine Halo"),
+    },
+    {
+        "siege_arc",
+        "Siege Arc",
+        "Twin arcs that sway wide and stay alive longer.",
+        28,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Arc, WeaponFixture::EvenlySpread, false, 28, 2, 0.26f, 1100.0f,
+                    1.1f, 1.15f, 0.84f, 0.0f, "Siege Arc"),
+    },
+    {
+        "blast_fan",
+        "Blast Fan",
+        "Explosive shells in a short heavy spread.",
+        29,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Basic, WeaponFixture::Splayed, false, 29, 3,
+                                        0.34f, 1080.0f, 0.8f, 1.25f, 1.0f, 10.0f, "Blast Fan");
+            weapon.explosion_radius = 8.0f;
+            return weapon;
+        }(),
+    },
+    {
+        "burst_carbine",
+        "Burst Carbine",
+        "A clean three-round burst on each trigger pull.",
+        30,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Burst, WeaponFixture::Center, false, 30, 1,
+                                        0.26f, 1650.0f, 0.55f, 1.0f, 0.78f, 0.0f, "Burst Carbine");
+            weapon.burst_count = 3;
+            weapon.burst_interval = 0.045f;
+            return weapon;
+        }(),
+    },
+    {
+        "scatter_burst",
+        "Scatter Burst",
+        "Short bursts with a wider spread fan.",
+        31,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Burst, WeaponFixture::Splayed, false, 31, 3,
+                                        0.34f, 1500.0f, 0.5f, 1.0f, 0.52f, 10.0f, "Scatter Burst");
+            weapon.burst_count = 2;
+            weapon.burst_interval = 0.06f;
+            return weapon;
+        }(),
+    },
+    {
+        "ion_beam",
+        "Ion Beam",
+        "A narrow cutting beam with quick refresh.",
+        32,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Beam, WeaponFixture::Center, true, 32, 1, 0.30f,
+                                        0.0f, 0.0f, 0.0f, 0.52f, 0.0f, "Ion Beam");
+            weapon.beam_duration = 0.18f;
+            weapon.beam_width = 5.0f;
+            weapon.beam_length = 185.0f;
+            weapon.beam_tick_interval = 0.04f;
+            return weapon;
+        }(),
+    },
+    {
+        "prism_beam",
+        "Prism Beam",
+        "A heavier beam with more width and a slower cycle.",
+        33,
+        PickupTier::Boss,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Beam, WeaponFixture::Center, false, 33, 1,
+                                        0.55f, 0.0f, 0.0f, 0.0f, 0.95f, 0.0f, "Prism Beam");
+            weapon.beam_duration = 0.28f;
+            weapon.beam_width = 9.0f;
+            weapon.beam_length = 210.0f;
+            weapon.beam_tick_interval = 0.05f;
+            return weapon;
+        }(),
+    },
+    {
+        "orbit_ring",
+        "Orbit Ring",
+        "Two orbitals that grind through nearby ships.",
+        34,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Orbital, WeaponFixture::Center, true, 34, 1,
+                                        0.65f, 0.0f, 0.0f, 1.3f, 0.72f, 0.0f, "Orbit Ring");
+            weapon.orbital_count = 2;
+            weapon.orbital_radius = 18.0f;
+            weapon.orbital_speed = 170.0f;
+            weapon.orbital_duration = 4.2f;
+            return weapon;
+        }(),
+    },
+    {
+        "saw_halo",
+        "Saw Halo",
+        "A heavier three-orbital halo with shorter life.",
+        35,
+        PickupTier::Boss,
+        PickupEffectType::GrantWeapon,
+        [] {
+            Weapon weapon = make_weapon(WeaponType::Orbital, WeaponFixture::Center, false, 35, 1,
+                                        0.95f, 0.0f, 0.0f, 1.45f, 1.0f, 0.0f, "Saw Halo");
+            weapon.orbital_count = 3;
+            weapon.orbital_radius = 24.0f;
+            weapon.orbital_speed = 220.0f;
+            weapon.orbital_duration = 3.6f;
+            return weapon;
+        }(),
+    },
+    {
         "hair_trigger",
         "Hair Trigger",
         "Faster cooldown, lower damage.",
@@ -216,12 +497,218 @@ const std::vector<PickupDef> kPickupDefs = {
         6.0f,
     },
     {
+        "shatter_tips",
+        "Shatter Tips",
+        "Piercing rounds, but lower raw damage.",
+        6,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomPierce,
+        {},
+        0.9f,
+        1.0f,
+    },
+    {
+        "wall_skippers",
+        "Wall Skippers",
+        "Adds side ricochet with a slower cadence.",
+        7,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomRicochet,
+        {},
+        1.14f,
+    },
+    {
+        "tracking_package",
+        "Tracking Package",
+        "Adds target seeking but trims shot speed.",
+        8,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomTracking,
+        {},
+        4.0f,
+        0.9f,
+    },
+    {
+        "volatile_payload",
+        "Volatile Payload",
+        "Explosive impact, slower reload.",
+        13,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomBlast,
+        {},
+        10.0f,
+        1.16f,
+    },
+    {
+        "overpressure_coils",
+        "Overpressure Coils",
+        "Faster shot speed and a little more damage.",
+        4,
+        PickupTier::Common,
+        PickupEffectType::UpgradeRandomVelocity,
+        {},
+        1.2f,
+        1.08f,
+    },
+    {
+        "ghost_barrel",
+        "Ghost Barrel",
+        "Slightly faster projectiles, less raw damage.",
+        34,
+        PickupTier::Common,
+        PickupEffectType::UpgradeRandomVelocity,
+        {},
+        1.08f,
+        0.95f,
+    },
+    {
+        "seeker_glass",
+        "Seeker Glass",
+        "A stronger tracking package with a sharper speed penalty.",
+        35,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomTracking,
+        {},
+        7.0f,
+        0.78f,
+    },
+    {
+        "payload_baffles",
+        "Payload Baffles",
+        "Bigger blast radius with even slower cadence.",
+        14,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomBlast,
+        {},
+        14.0f,
+        1.28f,
+    },
+    {
+        "burst_retrofit",
+        "Burst Retrofit",
+        "Converts a random weapon to burst fire.",
+        8,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomBurstMode,
+        {},
+        3.0f,
+        0.05f,
+    },
+    {
+        "beam_lens",
+        "Beam Lens",
+        "Converts a random weapon into a narrow beam.",
+        9,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomBeamLens,
+        {},
+        0.08f,
+        2.0f,
+    },
+    {
+        "burst_amplifier",
+        "Burst Amplifier",
+        "Adds an extra shot to a burst sequence.",
+        10,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomBurstCount,
+        {},
+        1.0f,
+        0.92f,
+    },
+    {
+        "rapid_burst_link",
+        "Rapid Burst Link",
+        "Tightens burst spacing and trims cooldown slightly.",
+        11,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomBurstCadence,
+        {},
+        0.75f,
+        0.94f,
+    },
+    {
+        "wide_lens",
+        "Wide Lens",
+        "Makes a beam wider but less damaging per tick.",
+        12,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomBeamWidth,
+        {},
+        2.5f,
+        0.88f,
+    },
+    {
+        "focal_array",
+        "Focal Array",
+        "Extends beam reach and duration.",
+        13,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomBeamLength,
+        {},
+        32.0f,
+        0.05f,
+    },
+    {
+        "melter_core",
+        "Melter Core",
+        "A beam upgrade that pushes tick damage hard.",
+        36,
+        PickupTier::Boss,
+        PickupEffectType::UpgradeRandomBeamDamage,
+        {},
+        1.35f,
+        1.10f,
+    },
+    {
+        "orbital_forge",
+        "Orbital Forge",
+        "Adds another orbital and widens the ring.",
+        37,
+        PickupTier::Rare,
+        PickupEffectType::UpgradeRandomOrbitalCount,
+        {},
+        1.0f,
+        4.0f,
+    },
+    {
+        "drill_jacket",
+        "Drill Jacket",
+        "A second point of pierce but reduced damage.",
+        15,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomPierce,
+        {},
+        0.84f,
+        0.0f,
+    },
+    {
         "hull_patch",
         "Hull Patch",
         "Gain one extra life.",
         31,
         PickupTier::Rare,
         PickupEffectType::ExtraLife,
+        {},
+        1.0f,
+    },
+    {
+        "aux_mount",
+        "Aux Mount",
+        "Gain one active weapon slot.",
+        32,
+        PickupTier::Rare,
+        PickupEffectType::ExtraWeaponSlot,
+        {},
+        1.0f,
+    },
+    {
+        "cargo_rack",
+        "Cargo Rack",
+        "Gain one stash slot.",
+        33,
+        PickupTier::Common,
+        PickupEffectType::ExtraStashSlot,
         {},
         1.0f,
     },

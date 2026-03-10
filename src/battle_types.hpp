@@ -48,6 +48,9 @@ enum class WeaponType {
     Rail,
     Arc,
     Mine,
+    Burst,
+    Beam,
+    Orbital,
 };
 
 enum class WeaponFixture {
@@ -70,6 +73,25 @@ struct Weapon {
     float projectile_radius{1.25f};
     float damage{1.0f};
     float spread_degrees{14.0f};
+    int pierce{0};
+    int ricochet{0};
+    float homing_turn{0.0f};
+    float wave_amplitude{0.0f};
+    float wave_frequency{0.0f};
+    float stop_age{0.0f};
+    float explosion_radius{0.0f};
+    int burst_count{1};
+    float burst_interval{0.0f};
+    int burst_remaining{0};
+    float burst_timer{0.0f};
+    float beam_duration{0.0f};
+    float beam_width{0.0f};
+    float beam_length{0.0f};
+    float beam_tick_interval{0.0f};
+    int orbital_count{0};
+    float orbital_radius{0.0f};
+    float orbital_speed{0.0f};
+    float orbital_duration{0.0f};
     std::vector<int> attached_pickups{};
 };
 
@@ -96,8 +118,40 @@ struct PlayerBullet {
     float wave_frequency{0.0f};
     float stop_age{0.0f};
     int pierce{0};
+    int ricochet{0};
+    float explosion_radius{0.0f};
     int tile{1};
     WeaponType type{WeaponType::Basic};
+};
+
+struct PlayerBeam {
+    Vec2 pos{};
+    Vec2 dir{0.0f, -1.0f};
+    float age{0.0f};
+    float duration{0.18f};
+    float damage{0.6f};
+    float tick_interval{0.05f};
+    float tick_timer{0.0f};
+    float width{6.0f};
+    float length{180.0f};
+    float base_height{4.0f};
+    float height{4.0f};
+    float target_height{4.0f};
+};
+
+struct PlayerOrbital {
+    Vec2 pos{};
+    float angle{0.0f};
+    float radius{16.0f};
+    float speed{180.0f};
+    float age{0.0f};
+    float life{4.0f};
+    float damage{0.7f};
+    float hit_cooldown{0.0f};
+    float base_height{3.5f};
+    float height{3.5f};
+    float target_height{3.5f};
+    int tile{34};
 };
 
 struct EnemyBullet {
@@ -247,13 +301,16 @@ struct BattleState {
     Ship ship{};
     std::vector<Weapon> weapons{};
     std::vector<PlayerBullet> player_bullets{};
+    std::vector<PlayerBeam> player_beams{};
+    std::vector<PlayerOrbital> player_orbitals{};
     std::vector<EnemyBullet> enemy_bullets{};
     std::vector<Enemy> enemies{};
     std::vector<Particle> particles{};
     std::vector<PickupActor> pickups{};
     std::vector<GoldActor> gold_pickups{};
     std::vector<Star> stars{};
-    std::vector<int> collected_pickups{};
+    std::vector<int> owned_pickups{};
+    std::vector<int> recent_pickups{};
     std::vector<Weapon> weapon_stash{};
     std::vector<ShopOffer> shop_offers{};
     CameraState camera{};

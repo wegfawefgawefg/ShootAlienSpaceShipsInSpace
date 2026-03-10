@@ -64,9 +64,10 @@ int pick_random_weapon_index(const BattleState& battle, bool prefer_non_auto) {
 }
 
 void remember_pickup(BattleState& battle, int def_index) {
-    battle.collected_pickups.push_back(def_index);
-    if (battle.collected_pickups.size() > 10) {
-        battle.collected_pickups.erase(battle.collected_pickups.begin());
+    battle.owned_pickups.push_back(def_index);
+    battle.recent_pickups.push_back(def_index);
+    if (battle.recent_pickups.size() > 10) {
+        battle.recent_pickups.erase(battle.recent_pickups.begin());
     }
 }
 
@@ -135,8 +136,170 @@ bool apply_pickup_by_index(BattleState& battle, int def_index, bool from_shop) {
         }
         break;
     }
+    case PickupEffectType::UpgradeRandomPierce: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.pierce += 1;
+            weapon.damage *= def.scalar_a;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomRicochet: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.ricochet += 1;
+            weapon.cooldown *= def.scalar_a;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomTracking: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.homing_turn = std::max(weapon.homing_turn, 0.0f) + def.scalar_a;
+            weapon.projectile_speed *= def.scalar_b;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBlast: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.explosion_radius = std::max(weapon.explosion_radius, 0.0f) + def.scalar_a;
+            weapon.cooldown *= def.scalar_b;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomVelocity: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.projectile_speed *= def.scalar_a;
+            weapon.damage *= def.scalar_b;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBurstMode: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.type = WeaponType::Burst;
+            weapon.burst_count = std::max(3, weapon.burst_count + static_cast<int>(def.scalar_a));
+            weapon.burst_interval = weapon.burst_interval <= 0.0f
+                                        ? def.scalar_b
+                                        : std::min(weapon.burst_interval, def.scalar_b);
+            weapon.damage *= 0.92f;
+            weapon.cooldown *= 1.08f;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBeamLens: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            weapon.type = WeaponType::Beam;
+            weapon.beam_duration = std::max(weapon.beam_duration, 0.14f) + def.scalar_a;
+            weapon.beam_width = std::max(weapon.beam_width, 5.0f) + def.scalar_b;
+            weapon.beam_length = std::max(weapon.beam_length, 170.0f) + 14.0f;
+            weapon.beam_tick_interval = 0.04f;
+            weapon.projectile_count = 1;
+            weapon.spread_degrees = 0.0f;
+            weapon.damage *= 0.86f;
+            weapon.cooldown *= 1.12f;
+            attach_pickup_to_weapon(weapon, def_index);
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBurstCount: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            if (weapon.type == WeaponType::Burst) {
+                weapon.burst_count += static_cast<int>(def.scalar_a);
+                weapon.damage *= def.scalar_b;
+                attach_pickup_to_weapon(weapon, def_index);
+            }
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBurstCadence: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            if (weapon.type == WeaponType::Burst) {
+                weapon.burst_interval = weapon.burst_interval <= 0.0f
+                                            ? def.scalar_a
+                                            : weapon.burst_interval * def.scalar_a;
+                weapon.cooldown *= def.scalar_b;
+                attach_pickup_to_weapon(weapon, def_index);
+            }
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBeamWidth: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            if (weapon.type == WeaponType::Beam) {
+                weapon.beam_width += def.scalar_a;
+                weapon.damage *= def.scalar_b;
+                attach_pickup_to_weapon(weapon, def_index);
+            }
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBeamLength: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            if (weapon.type == WeaponType::Beam) {
+                weapon.beam_length += def.scalar_a;
+                weapon.beam_duration += def.scalar_b;
+                attach_pickup_to_weapon(weapon, def_index);
+            }
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomBeamDamage: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            if (weapon.type == WeaponType::Beam) {
+                weapon.damage *= def.scalar_a;
+                weapon.cooldown *= def.scalar_b;
+                attach_pickup_to_weapon(weapon, def_index);
+            }
+        }
+        break;
+    }
+    case PickupEffectType::UpgradeRandomOrbitalCount: {
+        const int index = pick_random_weapon_index(battle, false);
+        if (index >= 0) {
+            Weapon& weapon = battle.weapons[static_cast<std::size_t>(index)];
+            if (weapon.type == WeaponType::Orbital) {
+                weapon.orbital_count += static_cast<int>(def.scalar_a);
+                weapon.orbital_radius += def.scalar_b;
+                attach_pickup_to_weapon(weapon, def_index);
+            }
+        }
+        break;
+    }
     case PickupEffectType::ExtraLife:
         battle.lives += static_cast<int>(def.scalar_a);
+        break;
+    case PickupEffectType::ExtraWeaponSlot:
+        battle.weapon_slots += static_cast<int>(def.scalar_a);
+        break;
+    case PickupEffectType::ExtraStashSlot:
+        battle.weapon_stash_slots += static_cast<int>(def.scalar_a);
         break;
     case PickupEffectType::PickupMagnet:
         battle.pickup_magnet_radius += def.scalar_a;

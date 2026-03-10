@@ -41,6 +41,18 @@ inline float vec2_length(Vec2 v) {
     return std::sqrt(vec2_length_sq(v));
 }
 
+inline float vec2_dot(Vec2 a, Vec2 b) {
+    return a.x * b.x + a.y * b.y;
+}
+
+inline Vec2 vec2_normalize(Vec2 v) {
+    const float len = vec2_length(v);
+    if (len <= 0.0001f) {
+        return {0.0f, -1.0f};
+    }
+    return {v.x / len, v.y / len};
+}
+
 inline float clampf(float value, float min_value, float max_value) {
     if (value < min_value) {
         return min_value;

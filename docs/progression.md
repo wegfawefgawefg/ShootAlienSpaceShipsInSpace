@@ -42,11 +42,31 @@ What exists now:
 - active weapon slots plus a stash
 - mouse hover / click selection in shop and inventory
 - per-weapon attached upgrade inspection
+- full owned-pickup inspection instead of only the recent log
+- shop rolls that are lane-weighted instead of totally uniform
 - first distinct weapon families:
   - missiles with splash
   - rail shots with piercing
   - arc shots with strong lateral sway
   - parked proximity mines
+  - ricochet guns
+  - tracking bullet guns
+  - explosive slug guns
+  - burst-fire guns with real multi-shot cadence
+  - beam weapons with persistent tick damage
+  - orbital weapons that create damaging satellites around the ship
+- first trait-style upgrades:
+  - pierce
+  - ricochet
+  - tracking
+  - blast radius
+  - projectile speed
+  - extra weapon slots / stash slots
+  - burst conversion
+  - beam conversion
+  - burst-count and burst-cadence upgrades
+  - beam width / length / damage upgrades
+  - orbital-count upgrades
 
 Why it still feels samey:
 

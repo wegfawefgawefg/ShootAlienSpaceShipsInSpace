@@ -72,6 +72,12 @@ const char* weapon_type_name(WeaponType type) {
         return "arc";
     case WeaponType::Mine:
         return "mine";
+    case WeaponType::Burst:
+        return "burst";
+    case WeaponType::Beam:
+        return "beam";
+    case WeaponType::Orbital:
+        return "orbital";
     }
     return "?";
 }
@@ -235,6 +241,23 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         draw_world_shadow(renderer, assets.particles, bullet.tile, session.battle.camera,
                           bullet.pos, bullet.height, angle_from_vector(bullet.vel), 1.0f);
     }
+    for (const PlayerBeam& beam : session.battle.player_beams) {
+        const Vec2 start = world_to_screen(session.battle.camera, beam.pos);
+        const Vec2 end = world_to_screen(session.battle.camera, beam.pos + beam.dir * beam.length);
+        const int steps = std::max(1, static_cast<int>(beam.length / 8.0f));
+        SDL_SetRenderDrawColor(renderer, 30, 50, 70, 110);
+        for (int i = 0; i < steps; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(steps);
+            const Vec2 p = lerp(start, end, t);
+            const float size = std::max(2.0f, beam.width * session.battle.camera.zoom * 0.7f);
+            const SDL_FRect rect = {p.x - size * 0.5f + 1.0f, p.y - size * 0.5f + 2.0f, size, size};
+            SDL_RenderFillRectF(renderer, &rect);
+        }
+    }
+    for (const PlayerOrbital& orbital : session.battle.player_orbitals) {
+        draw_world_shadow(renderer, assets.particles, orbital.tile, session.battle.camera,
+                          orbital.pos, orbital.height, 0.0f, 1.15f);
+    }
     for (const Particle& particle : session.battle.particles) {
         draw_world_shadow(renderer, assets.particles, particle.tile, session.battle.camera,
                           particle.pos, particle.height, 0.0f, 1.0f);
@@ -274,6 +297,24 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
     for (const EnemyBullet& bullet : session.battle.enemy_bullets) {
         draw_world_sprite(renderer, assets.particles, bullet.tile, session.battle.camera,
                           bullet.pos, angle_from_vector(bullet.vel));
+    }
+    for (const PlayerBeam& beam : session.battle.player_beams) {
+        const Vec2 start = world_to_screen(session.battle.camera, beam.pos);
+        const Vec2 end = world_to_screen(session.battle.camera, beam.pos + beam.dir * beam.length);
+        const int steps = std::max(1, static_cast<int>(beam.length / 7.0f));
+        SDL_SetRenderDrawColor(renderer, 120, 245, 255, 210);
+        for (int i = 0; i < steps; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(steps);
+            const Vec2 p = lerp(start, end, t);
+            const float pulse = 0.85f + std::sin(beam.age * 40.0f + t * 10.0f) * 0.15f;
+            const float size = std::max(2.0f, beam.width * session.battle.camera.zoom * pulse);
+            const SDL_FRect rect = {p.x - size * 0.5f, p.y - size * 0.5f, size, size};
+            SDL_RenderFillRectF(renderer, &rect);
+        }
+    }
+    for (const PlayerOrbital& orbital : session.battle.player_orbitals) {
+        draw_world_sprite(renderer, assets.particles, orbital.tile, session.battle.camera,
+                          orbital.pos, orbital.angle * 57.2957795f);
     }
     for (const Particle& particle : session.battle.particles) {
         draw_world_sprite(renderer, assets.particles, particle.tile, session.battle.camera,
@@ -318,6 +359,15 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         for (const EnemyBullet& bullet : session.battle.enemy_bullets) {
             draw_debug_box(renderer, session.battle.camera, bullet.pos, bullet.radius,
                            {64, 255, 255, 180});
+        }
+        for (const PlayerBeam& beam : session.battle.player_beams) {
+            draw_debug_box(renderer, session.battle.camera,
+                           beam.pos + beam.dir * (beam.length * 0.5f), beam.width * 0.5f,
+                           {128, 255, 255, 180});
+        }
+        for (const PlayerOrbital& orbital : session.battle.player_orbitals) {
+            draw_debug_box(renderer, session.battle.camera, orbital.pos, 5.0f,
+                           {255, 160, 255, 180});
         }
         for (const PickupActor& pickup : session.battle.pickups) {
             draw_debug_box(renderer, session.battle.camera, pickup.pos, pickup.radius,
@@ -400,18 +450,32 @@ bool is_weapon_mod_pickup(PickupEffectType effect) {
     return effect == PickupEffectType::UpgradeRandomRate ||
            effect == PickupEffectType::UpgradeRandomDamage ||
            effect == PickupEffectType::UpgradeRandomAuto ||
-           effect == PickupEffectType::UpgradeRandomSpread;
+           effect == PickupEffectType::UpgradeRandomSpread ||
+           effect == PickupEffectType::UpgradeRandomPierce ||
+           effect == PickupEffectType::UpgradeRandomRicochet ||
+           effect == PickupEffectType::UpgradeRandomTracking ||
+           effect == PickupEffectType::UpgradeRandomBlast ||
+           effect == PickupEffectType::UpgradeRandomVelocity ||
+           effect == PickupEffectType::UpgradeRandomBurstMode ||
+           effect == PickupEffectType::UpgradeRandomBeamLens ||
+           effect == PickupEffectType::UpgradeRandomBurstCount ||
+           effect == PickupEffectType::UpgradeRandomBurstCadence ||
+           effect == PickupEffectType::UpgradeRandomBeamWidth ||
+           effect == PickupEffectType::UpgradeRandomBeamLength ||
+           effect == PickupEffectType::UpgradeRandomBeamDamage ||
+           effect == PickupEffectType::UpgradeRandomOrbitalCount;
 }
 
 bool is_ship_pickup(PickupEffectType effect) {
-    return effect == PickupEffectType::ExtraLife || effect == PickupEffectType::PickupMagnet ||
+    return effect == PickupEffectType::ExtraLife || effect == PickupEffectType::ExtraWeaponSlot ||
+           effect == PickupEffectType::ExtraStashSlot || effect == PickupEffectType::PickupMagnet ||
            effect == PickupEffectType::GlassReactor || effect == PickupEffectType::StabilityFins;
 }
 
 std::vector<std::pair<int, int>> counted_pickups(const BattleState& battle,
                                                  bool (*predicate)(PickupEffectType)) {
     std::vector<std::pair<int, int>> counted;
-    for (int def_index : battle.collected_pickups) {
+    for (int def_index : battle.owned_pickups) {
         const PickupDef& def = pickup_def(def_index);
         if (!predicate(def.effect)) {
             continue;
@@ -671,6 +735,51 @@ void render_inventory_overlay(const SessionState& session, const Assets& assets,
                       "Projectile Radius: " + std::to_string(weapon.projectile_radius).substr(0, 5),
                       detail_panel.x + 12.0f, detail_y, primary);
             detail_y += 24.0f;
+            if (weapon.pierce > 0) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Pierce: " + std::to_string(weapon.pierce), detail_panel.x + 12.0f,
+                          detail_y, primary);
+                detail_y += 18.0f;
+            }
+            if (weapon.ricochet > 0) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Ricochet: " + std::to_string(weapon.ricochet), detail_panel.x + 12.0f,
+                          detail_y, primary);
+                detail_y += 18.0f;
+            }
+            if (weapon.homing_turn > 0.0f) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Tracking: " + std::to_string(weapon.homing_turn).substr(0, 5),
+                          detail_panel.x + 12.0f, detail_y, primary);
+                detail_y += 18.0f;
+            }
+            if (weapon.explosion_radius > 0.0f) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Blast Radius: " + std::to_string(weapon.explosion_radius).substr(0, 5),
+                          detail_panel.x + 12.0f, detail_y, primary);
+                detail_y += 18.0f;
+            }
+            if (weapon.burst_count > 1) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Burst: " + std::to_string(weapon.burst_count) + " @ " +
+                              std::to_string(weapon.burst_interval).substr(0, 5),
+                          detail_panel.x + 12.0f, detail_y, primary);
+                detail_y += 18.0f;
+            }
+            if (weapon.beam_duration > 0.0f) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Beam: " + std::to_string(weapon.beam_duration).substr(0, 5) +
+                              " sec / len " + std::to_string(static_cast<int>(weapon.beam_length)),
+                          detail_panel.x + 12.0f, detail_y, primary);
+                detail_y += 18.0f;
+            }
+            if (weapon.orbital_count > 0) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Orbitals: " + std::to_string(weapon.orbital_count) + " @ r " +
+                              std::to_string(static_cast<int>(weapon.orbital_radius)),
+                          detail_panel.x + 12.0f, detail_y, primary);
+                detail_y += 18.0f;
+            }
             draw_text(renderer, assets.ui_font_small, "Attached Upgrades", detail_panel.x + 12.0f,
                       detail_y, accent);
             detail_y += 18.0f;
@@ -815,6 +924,61 @@ void render_shop_overlay(const SessionState& session, const Assets& assets, SDL_
                           secondary);
                 detail_y += 18.0f;
             }
+            if (weapon.pierce > 0) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Pierce: " + std::to_string(weapon.pierce), detail_panel.x + 12.0f,
+                          detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            if (weapon.ricochet > 0) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Ricochet: " + std::to_string(weapon.ricochet), detail_panel.x + 12.0f,
+                          detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            if (weapon.homing_turn > 0.0f) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Tracking: " + std::to_string(weapon.homing_turn).substr(0, 5),
+                          detail_panel.x + 12.0f, detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            if (weapon.explosion_radius > 0.0f) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Blast Radius: " + std::to_string(weapon.explosion_radius).substr(0, 5),
+                          detail_panel.x + 12.0f, detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            if (weapon.burst_count > 1) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Burst: " + std::to_string(weapon.burst_count) + " @ " +
+                              std::to_string(weapon.burst_interval).substr(0, 5),
+                          detail_panel.x + 12.0f, detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            if (weapon.beam_duration > 0.0f) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Beam: " + std::to_string(weapon.beam_duration).substr(0, 5) +
+                              " sec / len " + std::to_string(static_cast<int>(weapon.beam_length)),
+                          detail_panel.x + 12.0f, detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            if (weapon.orbital_count > 0) {
+                draw_text(renderer, assets.ui_font_small,
+                          "Orbitals: " + std::to_string(weapon.orbital_count) + " @ r " +
+                              std::to_string(static_cast<int>(weapon.orbital_radius)),
+                          detail_panel.x + 12.0f, detail_y, secondary);
+                detail_y += 18.0f;
+            }
+            const std::string destination =
+                session.battle.weapons.size() <
+                        static_cast<std::size_t>(session.battle.weapon_slots)
+                    ? "Will equip now"
+                : session.battle.weapon_stash.size() <
+                        static_cast<std::size_t>(session.battle.weapon_stash_slots)
+                    ? "Will go to stash"
+                    : "No room: purchase blocked";
+            draw_text(renderer, assets.ui_font_small, destination, detail_panel.x + 12.0f, detail_y,
+                      accent);
         } else {
             draw_text(renderer, assets.ui_font_small, "Upgrade / augment", detail_panel.x + 12.0f,
                       detail_y, secondary);
@@ -931,8 +1095,8 @@ void render_battle_overlay(const SessionState& session, const Assets& assets,
     draw_text(renderer, assets.ui_font_small, "pickup log", x, y, primary);
     y += 16.0f;
 
-    for (auto it = session.battle.collected_pickups.rbegin();
-         it != session.battle.collected_pickups.rend() &&
+    for (auto it = session.battle.recent_pickups.rbegin();
+         it != session.battle.recent_pickups.rend() &&
          y < layout.right_panel.y + layout.right_panel.h - 18.0f;
          ++it) {
         const PickupDef& def = pickup_def(*it);

@@ -101,7 +101,9 @@ void reset_battle(BattleState& battle, Assets& assets) {
     battle.particles.clear();
     battle.pickups.clear();
     battle.gold_pickups.clear();
-    battle.collected_pickups.clear();
+    battle.player_beams.clear();
+    battle.owned_pickups.clear();
+    battle.recent_pickups.clear();
     battle.weapon_stash.clear();
     battle.shop_offers.clear();
     seed_default_weapons(battle);
@@ -392,7 +394,7 @@ void session_update(SessionState& session, Assets& assets, float dt) {
             update_enemy_wave(session.battle, substep_dt);
         }
 
-        update_player_bullets(session.battle, substep_dt);
+        update_player_bullets(session.battle, assets, substep_dt);
         update_enemy_bullets(session.battle, substep_dt);
         update_particles(session.battle, substep_dt);
         update_pickups(session.battle, assets, substep_dt);

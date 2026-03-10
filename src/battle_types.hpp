@@ -7,8 +7,8 @@
 #include <array>
 #include <vector>
 
-inline constexpr int GAME_WIDTH = 240;
-inline constexpr int GAME_HEIGHT = 160;
+inline constexpr int GAME_WIDTH = 640;
+inline constexpr int GAME_HEIGHT = 360;
 inline constexpr int WINDOW_WIDTH = 1280;
 inline constexpr int WINDOW_HEIGHT = 720;
 
@@ -29,6 +29,9 @@ enum class EnemyBehavior {
     Rammer,
     Circler,
     Wander,
+    BossSpray,
+    BossSpokes,
+    BossCharge,
 };
 
 enum class EnemyFacing {
@@ -64,7 +67,9 @@ struct Weapon {
 
 struct CameraState {
     Vec2 center{GAME_WIDTH * 0.5f, GAME_HEIGHT * 0.5f};
+    Vec2 shake_offset{};
     float zoom{0.9f};
+    float shake{0.0f};
 };
 
 struct PlayerBullet {
@@ -139,7 +144,15 @@ struct Enemy {
     float height{4.0f};
     float target_height{4.0f};
     float hover_phase{0.0f};
+    float speed_scale{1.0f};
+    float boss_behavior_timer{0.0f};
     int type_id{0};
+    int wave_tag{0};
+    int boss_group_index{0};
+    int boss_behavior_index{0};
+    bool is_boss{false};
+    std::array<std::array<EnemyBehavior, 3>, 3> boss_behavior_groups{};
+    std::array<int, 3> boss_group_sizes{{0, 0, 0}};
     EnemyBehavior behavior{EnemyBehavior::Straight};
     EnemyFacing facing{EnemyFacing::FaceDown};
 };
@@ -157,11 +170,25 @@ struct LevelSpawnDef {
     EnemyFacing facing{EnemyFacing::FaceDown};
     Vec2 intro_start{};
     Vec2 formation_pos{};
+    float hp{1.0f};
+    float radius{3.0f};
+    float speed_scale{1.0f};
+    bool is_boss{false};
+    std::array<std::array<EnemyBehavior, 3>, 3> boss_behavior_groups{};
+    std::array<int, 3> boss_group_sizes{{0, 0, 0}};
+};
+
+struct WaveDef {
+    int number{1};
+    bool timed{true};
+    float duration{8.0f};
+    bool is_boss{false};
+    std::vector<LevelSpawnDef> spawns{};
 };
 
 struct LevelDef {
     int number{1};
-    std::vector<LevelSpawnDef> spawns{};
+    std::vector<WaveDef> waves{};
 };
 
 struct BattleState {
@@ -176,13 +203,17 @@ struct BattleState {
     float warp_level{0.0f};
     float level_timer{0.0f};
     float level_text_timer{0.0f};
+    float wave_timer{0.0f};
     float respawn_timer{0.0f};
     float invuln_timer{0.0f};
     bool can_shoot{false};
     bool player_active{true};
     bool debug_colliders{true};
+    bool wave_has_timer{false};
     int lives{3};
     int current_level_index{0};
+    int current_wave_index{0};
+    int active_wave_tag{0};
     int hitstop_frames{0};
     BattlePhase phase{BattlePhase::LevelIntro};
     std::array<int, 2> music_channels{{-1, -1}};

@@ -26,7 +26,7 @@ From here, the C++ version intentionally grows past the Python prototype.
 - Default behavior: centered and floating-friendly for tiling WM setups like i3
 - Keep the retro asset scale and simple sprite rendering
 - Use the starfield warp effect as a transition visual between levels
-- Render the gameplay world to a low-resolution intermediate texture
+- Render the gameplay world to a half-resolution intermediate texture: `640x360`
 - Render the UI directly at full window resolution
 - Keep the world pixelated and the overlay crisp
 
@@ -40,12 +40,12 @@ The player keeps control during level transitions, but shooting is disabled duri
 
 ## Camera
 
-- The game needs a real camera instead of a fixed locked screen.
-- The camera should pan with the player.
-- The camera should be able to zoom out when the fight gets busy.
-- Camera motion should be smooth, not snapped.
+- Keep the combat camera fixed in a strong readable shmup framing.
+- Do not slide the gameplay camera around with the player during normal play.
+- Replace camera motion with camera shake for impact.
+- The starfield can still parallax / drift in response to player movement and warp.
 - UI must stay in screen space and never obstruct the main play area.
-- The current camera should bias toward a slightly more zoomed-out view than the first port pass.
+- The combat framing should be a little closer than the last pass.
 
 ## Player And Party
 
@@ -117,15 +117,31 @@ Outside transitions, the starfield should return to the slower Python-style feel
 - calmer base drift
 - stronger edge acceleration only when warp ramps up
 
-## Levels
+## Levels And Waves
 
-- Start with `10` hardcoded levels.
-- Each level defines:
-  - enemy spawn entries
-  - a target formation layout
-  - enemy type ids
-  - behavior assignments
-  - facing assignments
+- Cut scope to `4` levels for now.
+- Each level contains multiple waves.
+- Difficulty should rise across waves inside a level and again from one level to the next.
+- Difficulty can increase through:
+  - ship count
+  - speed
+  - size
+  - hp
+  - behavior complexity
+- The last wave of each level should be a boss wave.
+
+Wave rules:
+
+- Normal waves can have a timer.
+- If the player kills the current wave early, launch the next wave immediately.
+- If the timer expires first, launch the next wave anyway even if earlier ships are still alive.
+- Boss waves should not have a timer.
+
+UI should show:
+
+- current level
+- current wave
+- remaining wave timer when relevant
 
 Hardcoded C++ data is fine for now. JSON is optional later if it becomes useful.
 
@@ -161,6 +177,8 @@ Enemies also need:
 - hit shake
 - optional larger scale / size
 - optional split_count and split stage
+- optional `is_boss`
+- optional boss behavior state
 
 Enemy HP must allow enemies to take more than one hit.
 Hit shake can just be a decaying float that adds random draw offset while active.
@@ -210,6 +228,31 @@ Initial behavior set:
    - Flies there
    - Repeats
 
+## Boss Direction
+
+Bosses are still enemies, but with extra properties and extra behavior orchestration.
+
+- Beating a boss can unlock a simpler non-boss version later.
+- Boss guns are still just guns / attack patterns, but some are reserved for bosses.
+- Bosses should rotate between behaviors over time or by random selection.
+- The available boss behavior set should change by HP thresholds:
+  - above `50%`
+  - between `50%` and `25%`
+  - below `25%`
+
+Example boss attack patterns:
+
+- machine-gun spray
+- rotating spoke bursts
+- charging beam
+- mine laying
+- ramming phase
+
+For debug UI, show at least:
+
+- current boss behavior name
+- current boss behavior group / phase
+
 ## Enemy Facing Modes
 
 Enemies also have a separate facing rule:
@@ -247,6 +290,8 @@ These are separate from behavior so the same movement logic can support differen
 - Show player / party details in the UI
 - UI must fit comfortably in the side panels at full resolution
 - Collider shapes should be smaller than the full `8x8` sprite footprint when appropriate
+- Show wave timer and wave index in the UI
+- Show boss behavior name and group in the UI when a boss is active
 
 ## Code Shape
 
@@ -267,8 +312,8 @@ These are separate from behavior so the same movement logic can support differen
 ## Tuning Backlog
 
 - Title screen placement and scale still need tuning to match the Python reference better.
-- Camera follow and zoom need gameplay feel tuning.
-- Starfield speed / warp ramp still need polish.
+- The new fixed combat framing and shake values will need tuning.
+- Starfield speed / warp ramp / parallax will need polish.
 - Enemy formation arrival timing and level intro timing need tuning.
 - Enemy collision / bullet readability need local playtesting.
 - UI panel layout needs cleanup so it reads clearly without stealing too much space.

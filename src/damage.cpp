@@ -24,6 +24,7 @@ int random_index(int count) {
 
 void add_hitstop(BattleState& battle, int frames) {
     battle.hitstop_frames += frames;
+    battle.camera.shake = std::max(battle.camera.shake, 2.2f + static_cast<float>(frames) * 0.4f);
 }
 
 void spawn_explosion(BattleState& battle, Vec2 pos, int count) {
@@ -56,6 +57,7 @@ void damage_player(BattleState& battle) {
     battle.ship.vel = {0.0f, 0.0f};
     battle.ship.shake = 6.0f;
     battle.can_shoot = false;
+    battle.ship.target_height = battle.ship.base_height - 1.5f;
     add_hitstop(battle, 4);
 }
 
@@ -124,6 +126,7 @@ void resolve_damage(BattleState& battle) {
                 bullet.age = 999.0f;
                 enemy.hp -= bullet.damage;
                 enemy.shake = 4.0f;
+                enemy.target_height = enemy.base_height - 1.0f;
                 add_hitstop(battle, 1);
                 if (enemy.hp <= 0.0f) {
                     spawn_explosion(battle, enemy.pos, 10);

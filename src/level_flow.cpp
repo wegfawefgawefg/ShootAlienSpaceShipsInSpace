@@ -16,6 +16,7 @@ constexpr float PLAYER_ACCEL = 1200.0f;
 constexpr float PLAYER_DRAG = 10.0f;
 constexpr float BASE_WARP_LEVEL = 0.0f;
 constexpr float INTRO_WARP_LEVEL = 1.0f;
+constexpr float CAMERA_SHAKE_DECAY = 18.0f;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -71,9 +72,15 @@ void begin_level_transition(BattleState& battle, Assets& assets, int level_index
 }
 
 void reset_battle(BattleState& battle, Assets& assets) {
-    battle.ship = {
-        {GAME_WIDTH * 0.5f, GAME_HEIGHT * 0.8f}, {0.0f, 0.0f}, 2.75f, 0.0f, 5.5f, 5.5f, 5.5f, 0.0f};
-    battle.camera = {{GAME_WIDTH * 0.5f, GAME_HEIGHT * 0.5f}, 0.72f};
+    battle.ship = {{GAME_WIDTH * 0.5f, GAME_HEIGHT * 0.82f},
+                   {0.0f, 0.0f},
+                   2.75f,
+                   0.0f,
+                   5.5f,
+                   5.5f,
+                   5.5f,
+                   0.0f};
+    battle.camera = {{GAME_WIDTH * 0.5f, GAME_HEIGHT * 0.5f}, {0.0f, 0.0f}, 1.02f, 0.0f};
     battle.warp_level = BASE_WARP_LEVEL;
     battle.respawn_timer = 0.0f;
     battle.invuln_timer = 0.0f;
@@ -124,8 +131,8 @@ void update_player_ship(BattleState& battle, const InputState& input, float dt) 
     battle.ship.vel += thrust * dt;
     battle.ship.vel += (-PLAYER_DRAG * battle.ship.vel) * dt;
     battle.ship.pos += battle.ship.vel * dt;
-    battle.ship.pos.x = clampf(battle.ship.pos.x, 8.0f, GAME_WIDTH - 8.0f);
-    battle.ship.pos.y = clampf(battle.ship.pos.y, 8.0f, GAME_HEIGHT - 8.0f);
+    battle.ship.pos.x = clampf(battle.ship.pos.x, 14.0f, GAME_WIDTH - 14.0f);
+    battle.ship.pos.y = clampf(battle.ship.pos.y, 20.0f, GAME_HEIGHT - 18.0f);
     battle.ship.hover_phase += dt * 5.0f + vec2_length(battle.ship.vel) * 0.02f;
     battle.ship.target_height = battle.ship.base_height + std::sin(battle.ship.hover_phase) * 0.7f -
                                 battle.ship.shake * 0.08f;
@@ -134,15 +141,15 @@ void update_player_ship(BattleState& battle, const InputState& input, float dt) 
 }
 
 void update_camera(BattleState& battle, float dt) {
-    const float target_zoom =
-        0.72f - std::min(0.14f, 0.008f * static_cast<float>(battle.enemies.size()));
-    battle.camera.zoom += (target_zoom - battle.camera.zoom) * std::min(1.0f, dt * 3.0f);
-    battle.camera.center.x +=
-        (battle.ship.pos.x - battle.camera.center.x) * std::min(1.0f, dt * 4.0f);
-    battle.camera.center.y +=
-        (battle.ship.pos.y - battle.camera.center.y) * std::min(1.0f, dt * 4.0f);
-    battle.camera.center.x = clampf(battle.camera.center.x, 40.0f, GAME_WIDTH - 40.0f);
-    battle.camera.center.y = clampf(battle.camera.center.y, 32.0f, GAME_HEIGHT - 32.0f);
+    battle.camera.center = {GAME_WIDTH * 0.5f, GAME_HEIGHT * 0.5f};
+    battle.camera.zoom += (1.02f - battle.camera.zoom) * std::min(1.0f, dt * 5.0f);
+    battle.camera.shake = std::max(0.0f, battle.camera.shake - dt * CAMERA_SHAKE_DECAY);
+    if (battle.camera.shake > 0.0f) {
+        battle.camera.shake_offset = {random_range(-battle.camera.shake, battle.camera.shake),
+                                      random_range(-battle.camera.shake, battle.camera.shake)};
+    } else {
+        battle.camera.shake_offset = {0.0f, 0.0f};
+    }
 }
 
 void update_starfield(BattleState& battle, float dt) {
@@ -155,7 +162,10 @@ void update_starfield(BattleState& battle, float dt) {
         const float normal_speed = 7.0f + star.speed * 10.0f;
         const float warp_speed =
             battle.warp_level * battle.warp_level * (10.0f + edge_bias * 120.0f);
+        const float side_drift = -battle.ship.vel.x * (0.02f + star.speed * 0.015f);
+        star.pos.x += side_drift * dt;
         star.pos.y += (normal_speed + warp_speed) * dt;
+        star.pos.x = wrapf(star.pos.x, -GAME_WIDTH * 0.25f, GAME_WIDTH * 1.25f);
     }
 
     battle.stars.erase(
@@ -170,10 +180,10 @@ void update_warp(BattleState& battle, float dt) {
     battle.warp_level += (target - battle.warp_level) * std::min(1.0f, dt * 3.5f);
 }
 
-void maybe_advance_level(BattleState& battle) {
-    if (battle.phase == BattlePhase::Active && battle.enemies.empty()) {
-        // handled in session_update so transition audio can play with the state change
-    }
+bool current_wave_cleared(const BattleState& battle) {
+    return std::none_of(battle.enemies.begin(), battle.enemies.end(), [&](const Enemy& enemy) {
+        return enemy.wave_tag == battle.active_wave_tag;
+    });
 }
 
 } // namespace
@@ -218,7 +228,6 @@ void session_handle_event(SessionState& session, Assets& assets, const SDL_Event
 }
 
 void session_update(SessionState& session, Assets& assets, float dt) {
-    (void)assets;
     if (session.scene != SceneMode::Battle) {
         return;
     }
@@ -253,9 +262,21 @@ void session_update(SessionState& session, Assets& assets, float dt) {
     update_enemy_bullets(session.battle, dt);
     update_particles(session.battle, dt);
     resolve_damage(session.battle);
-    maybe_advance_level(session.battle);
-    if (session.battle.phase == BattlePhase::Active && session.battle.enemies.empty()) {
-        begin_level_transition(session.battle, assets, session.battle.current_level_index + 1);
+    if (session.battle.phase == BattlePhase::Active) {
+        if (session.battle.wave_has_timer) {
+            session.battle.wave_timer = std::max(0.0f, session.battle.wave_timer - dt);
+        }
+
+        const bool wave_done = current_wave_cleared(session.battle);
+        const bool timer_expired =
+            session.battle.wave_has_timer && session.battle.wave_timer <= 0.0f;
+        if (wave_done || timer_expired) {
+            if (!spawn_next_wave(session.battle)) {
+                begin_level_transition(session.battle, assets,
+                                       (session.battle.current_level_index + 1) %
+                                           static_cast<int>(levels().size()));
+            }
+        }
     }
 
     if (session.battle.lives <= 0 && !session.battle.player_active &&

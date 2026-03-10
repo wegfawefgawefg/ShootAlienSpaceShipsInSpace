@@ -50,3 +50,14 @@ inline float clampf(float value, float min_value, float max_value) {
     }
     return value;
 }
+
+inline float wrapf(float value, float min_value, float max_value) {
+    const float span = max_value - min_value;
+    while (value < min_value) {
+        value += span;
+    }
+    while (value >= max_value) {
+        value -= span;
+    }
+    return value;
+}

@@ -13,16 +13,27 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(SASSIS_SOURCES
   "${CMAKE_SOURCE_DIR}/src/main.cpp"
-  "${CMAKE_SOURCE_DIR}/src/port/app.cpp"
-  "${CMAKE_SOURCE_DIR}/src/port/assets.cpp"
-  "${CMAKE_SOURCE_DIR}/src/port/gameplay.cpp"
+  "${CMAKE_SOURCE_DIR}/src/app.cpp"
+  "${CMAKE_SOURCE_DIR}/src/assets.cpp"
+  "${CMAKE_SOURCE_DIR}/src/battle_render.cpp"
+  "${CMAKE_SOURCE_DIR}/src/damage.cpp"
+  "${CMAKE_SOURCE_DIR}/src/enemy_behavior.cpp"
+  "${CMAKE_SOURCE_DIR}/src/level_data.cpp"
+  "${CMAKE_SOURCE_DIR}/src/level_flow.cpp"
+  "${CMAKE_SOURCE_DIR}/src/player_weapons.cpp"
 )
 
 set(SASSIS_HEADERS
-  "${CMAKE_SOURCE_DIR}/src/port/app.hpp"
-  "${CMAKE_SOURCE_DIR}/src/port/assets.hpp"
-  "${CMAKE_SOURCE_DIR}/src/port/gameplay.hpp"
-  "${CMAKE_SOURCE_DIR}/src/port/math.hpp"
+  "${CMAKE_SOURCE_DIR}/src/app.hpp"
+  "${CMAKE_SOURCE_DIR}/src/assets.hpp"
+  "${CMAKE_SOURCE_DIR}/src/battle_render.hpp"
+  "${CMAKE_SOURCE_DIR}/src/battle_types.hpp"
+  "${CMAKE_SOURCE_DIR}/src/damage.hpp"
+  "${CMAKE_SOURCE_DIR}/src/enemy_behavior.hpp"
+  "${CMAKE_SOURCE_DIR}/src/level_data.hpp"
+  "${CMAKE_SOURCE_DIR}/src/level_flow.hpp"
+  "${CMAKE_SOURCE_DIR}/src/math.hpp"
+  "${CMAKE_SOURCE_DIR}/src/player_weapons.hpp"
 )
 
 add_executable(ShootAlienSpaceShipsInSpace ${SASSIS_SOURCES} ${SASSIS_HEADERS})

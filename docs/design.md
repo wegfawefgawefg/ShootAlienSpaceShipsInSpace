@@ -218,6 +218,32 @@ These are separate from behavior so the same movement logic can support differen
   - particle / projectile type
   - fixture type
 - Show player / party details in the UI
+
+## Code Shape
+
+- Keep `src/` flat.
+- Keep modules narrow and explicit:
+  - `app`
+  - `assets`
+  - `battle_types`
+  - `level_data`
+  - `player_weapons`
+  - `damage`
+  - `enemy_behavior`
+  - `level_flow`
+  - `battle_render`
+- Do not reintroduce the old Lua / menu / template stack.
+- Keep files small enough to stay readable and easy to reason about.
+
+## Tuning Backlog
+
+- Title screen placement and scale still need tuning to match the Python reference better.
+- Camera follow and zoom need gameplay feel tuning.
+- Starfield speed / warp ramp still need polish.
+- Enemy formation arrival timing and level intro timing need tuning.
+- Enemy collision / bullet readability need local playtesting.
+- UI panel layout needs cleanup so it reads clearly without stealing too much space.
+- Debug boxes should stay easy to toggle if they start cluttering combat.
 - UI should stay out of the gameplay field
 
 ## Implementation Order

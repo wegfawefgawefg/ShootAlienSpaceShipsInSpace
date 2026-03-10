@@ -104,10 +104,23 @@ void app_run(App& app) {
             accumulator -= FIXED_STEP_SECONDS;
         }
 
+        const bool show_cursor =
+            app.session.scene == SceneMode::Battle &&
+            (app.session.battle.inventory_open || app.session.battle.phase == BattlePhase::Shop);
+        SDL_ShowCursor(show_cursor ? SDL_ENABLE : SDL_DISABLE);
+
         int window_width = WINDOW_WIDTH;
         int window_height = WINDOW_HEIGHT;
         SDL_GetRendererOutputSize(app.renderer, &window_width, &window_height);
         const ScreenLayout layout = make_screen_layout(window_width, window_height);
+        int mouse_x = 0;
+        int mouse_y = 0;
+        const Uint32 mouse_mask = SDL_GetMouseState(&mouse_x, &mouse_y);
+        const bool left_down = (mouse_mask & SDL_BUTTON_LMASK) != 0;
+        const bool left_pressed = left_down && !app.mouse_left_down;
+        app.mouse_left_down = left_down;
+        session_handle_pointer(app.session, app.assets, layout, static_cast<float>(mouse_x),
+                               static_cast<float>(mouse_y), left_pressed);
 
         SDL_SetRenderTarget(app.renderer, app.scene_target);
         session_render_scene(app.session, app.assets, app.renderer, SDL_GetTicks64());

@@ -37,6 +37,16 @@ What exists now:
 - auto vs semi weapon state
 - simple ship augments
 - inventory view
+- gold drops and banked money
+- a between-level shop phase
+- active weapon slots plus a stash
+- mouse hover / click selection in shop and inventory
+- per-weapon attached upgrade inspection
+- first distinct weapon families:
+  - missiles with splash
+  - rail shots with piercing
+  - arc shots with strong lateral sway
+  - parked proximity mines
 
 Why it still feels samey:
 
@@ -216,10 +226,9 @@ Later slices:
 - targeted missiles
 - boss-exclusive rewards
 - choice rewards instead of purely random pickup grabs
-- gold / economy
-- shop screen
-- mouse hover descriptions
 - sell / reroll / pack systems
+- hover cards with richer stat deltas and target previews
+- stash management beyond simple equip / unequip
 
 ## Inspection And UX
 
@@ -258,6 +267,13 @@ Mouse hover and keyboard focus should both expose:
 - rarity
 - sell value
 - shop price
+
+Shop phase should also expose:
+
+- which offers are weapon grants versus augments
+- whether a granted weapon will land in an active slot or stash
+- current active/stash occupancy
+- reroll cost
 
 This is especially important in the shop.
 

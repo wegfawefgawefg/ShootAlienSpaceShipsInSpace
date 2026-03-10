@@ -9,6 +9,9 @@ struct ScreenLayout {
 };
 
 ScreenLayout make_screen_layout(int window_width, int window_height);
+int inventory_selectable_index_at(const BattleState& battle, const ScreenLayout& layout, float x,
+                                  float y, int current_selection);
+int shop_offer_index_at(const BattleState& battle, const ScreenLayout& layout, float x, float y);
 void session_render_scene(const SessionState& session, const Assets& assets, SDL_Renderer* renderer,
                           Uint64 ticks);
 void session_render_overlay(const SessionState& session, const Assets& assets,

@@ -24,6 +24,18 @@ int random_index(int count) {
     return std::rand() % count;
 }
 
+bool add_weapon_to_loadout(BattleState& battle, Weapon weapon) {
+    if (battle.weapons.size() < static_cast<std::size_t>(battle.weapon_slots)) {
+        battle.weapons.push_back(std::move(weapon));
+        return true;
+    }
+    if (battle.weapon_stash.size() < static_cast<std::size_t>(battle.weapon_stash_slots)) {
+        battle.weapon_stash.push_back(std::move(weapon));
+        return true;
+    }
+    return false;
+}
+
 bool is_pickup_in_safe_band(Vec2 pos) {
     return pos.x >= 24.0f && pos.x <= GAME_WIDTH - 24.0f && pos.y >= 24.0f &&
            pos.y <= GAME_HEIGHT - 42.0f;
@@ -62,12 +74,20 @@ void attach_pickup_to_weapon(Weapon& weapon, int def_index) {
     weapon.attached_pickups.push_back(def_index);
 }
 
-void apply_pickup(BattleState& battle, int def_index) {
+} // namespace
+
+bool apply_pickup_by_index(BattleState& battle, int def_index, bool from_shop) {
     const PickupDef& def = pickup_def(def_index);
     switch (def.effect) {
     case PickupEffectType::GrantWeapon: {
         Weapon weapon = def.weapon;
-        battle.weapons.push_back(weapon);
+        if (!add_weapon_to_loadout(battle, weapon)) {
+            if (from_shop) {
+                return false;
+            }
+            battle.gold += 4;
+            battle.gold_gain_flash = 1.0f;
+        }
         break;
     }
     case PickupEffectType::UpgradeRandomRate: {
@@ -134,9 +154,8 @@ void apply_pickup(BattleState& battle, int def_index) {
     }
 
     remember_pickup(battle, def_index);
+    return true;
 }
-
-} // namespace
 
 void maybe_spawn_enemy_drop(BattleState& battle, const Enemy& enemy) {
     const int def_index = roll_pickup_drop(enemy);
@@ -222,10 +241,11 @@ void update_pickups(BattleState& battle, Assets& assets, float dt) {
         if (battle.player_active) {
             const float radius = pickup.radius + battle.ship.radius + 2.0f;
             if (vec2_length_sq(battle.ship.pos - pickup.pos) <= radius * radius) {
-                apply_pickup(battle, pickup.def_index);
-                Mix_PlayChannel(
-                    -1, assets.rock_hit_sounds[static_cast<std::size_t>(random_index(3))], 0);
-                collected = true;
+                if (apply_pickup_by_index(battle, pickup.def_index, false)) {
+                    Mix_PlayChannel(
+                        -1, assets.rock_hit_sounds[static_cast<std::size_t>(random_index(3))], 0);
+                    collected = true;
+                }
             }
         }
 

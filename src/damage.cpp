@@ -25,6 +25,13 @@ int random_index(int count) {
     return std::rand() % count;
 }
 
+struct ExplosionEvent {
+    Vec2 pos{};
+    float radius{0.0f};
+    float damage{0.0f};
+    int particle_count{0};
+};
+
 void add_hitstop(BattleState& battle, int frames) {
     battle.hitstop_frames += frames;
     battle.camera.shake = std::max(battle.camera.shake, (3.2f + static_cast<float>(frames) * 0.8f) *
@@ -63,6 +70,42 @@ void damage_player(BattleState& battle) {
     battle.can_shoot = false;
     battle.ship.target_height = battle.ship.base_height - 1.5f;
     add_hitstop(battle, 6);
+}
+
+void damage_enemy_visuals(BattleState& battle, Enemy& enemy, bool heavy) {
+    enemy.shake = enemy.is_boss ? 6.0f : 5.0f;
+    enemy.target_height = enemy.base_height - 1.0f;
+    add_hitstop(battle, enemy.is_boss ? 3 : (heavy ? 3 : 2));
+}
+
+void kill_enemy(BattleState& battle, const Enemy& enemy) {
+    spawn_explosion(battle, enemy.pos, enemy.is_boss ? 18 : 10);
+    maybe_spawn_enemy_gold(battle, enemy, true);
+    maybe_spawn_enemy_drop(battle, enemy);
+}
+
+void apply_explosion_damage(BattleState& battle, const ExplosionEvent& explosion) {
+    spawn_explosion(battle, explosion.pos, explosion.particle_count);
+    std::vector<Enemy> survivors;
+    survivors.reserve(battle.enemies.size());
+    for (Enemy enemy : battle.enemies) {
+        const Vec2 delta = enemy.pos - explosion.pos;
+        const float hit_radius = explosion.radius + enemy.radius;
+        const float dist_sq = vec2_length_sq(delta);
+        if (dist_sq <= hit_radius * hit_radius) {
+            const float dist = std::sqrt(std::max(0.0f, dist_sq));
+            const float falloff =
+                clampf(1.0f - dist / std::max(1.0f, explosion.radius), 0.35f, 1.0f);
+            enemy.hp -= explosion.damage * falloff;
+            damage_enemy_visuals(battle, enemy, true);
+        }
+        if (enemy.hp <= 0.0f) {
+            kill_enemy(battle, enemy);
+        } else {
+            survivors.push_back(enemy);
+        }
+    }
+    battle.enemies = std::move(survivors);
 }
 
 } // namespace
@@ -119,24 +162,51 @@ void update_player_respawn(BattleState& battle, float dt) {
 }
 
 void resolve_damage(BattleState& battle, Assets& assets) {
+    std::vector<ExplosionEvent> explosions;
+    explosions.reserve(8);
+
+    for (PlayerBullet& bullet : battle.player_bullets) {
+        if (bullet.type != WeaponType::Mine || bullet.age < bullet.stop_age ||
+            bullet.age > 900.0f) {
+            continue;
+        }
+        for (const Enemy& enemy : battle.enemies) {
+            const float trigger_radius = enemy.radius + 14.0f;
+            if (vec2_length_sq(enemy.pos - bullet.pos) <= trigger_radius * trigger_radius) {
+                explosions.push_back({bullet.pos, 18.0f, bullet.damage * 1.05f, 14});
+                bullet.age = 999.0f;
+                break;
+            }
+        }
+    }
+
     std::vector<Enemy> surviving_enemies;
     surviving_enemies.reserve(battle.enemies.size());
 
     for (Enemy& enemy : battle.enemies) {
         bool dead = false;
         for (PlayerBullet& bullet : battle.player_bullets) {
+            if (bullet.age > 900.0f) {
+                continue;
+            }
             const float radius = bullet.radius + enemy.radius;
             if (vec2_length_sq(enemy.pos - bullet.pos) <= radius * radius) {
-                bullet.age = 999.0f;
                 enemy.hp -= bullet.damage;
-                enemy.shake = enemy.is_boss ? 6.0f : 5.0f;
-                enemy.target_height = enemy.base_height - 1.0f;
-                add_hitstop(battle, enemy.is_boss ? 3 : 2);
+                damage_enemy_visuals(battle, enemy, false);
                 maybe_spawn_enemy_gold(battle, enemy, false);
+                if (bullet.type == WeaponType::Missile) {
+                    explosions.push_back({bullet.pos, 13.0f, bullet.damage * 0.9f, 10});
+                    bullet.age = 999.0f;
+                } else if (bullet.type == WeaponType::Mine) {
+                    explosions.push_back({bullet.pos, 18.0f, bullet.damage * 1.05f, 14});
+                    bullet.age = 999.0f;
+                } else if (bullet.type == WeaponType::Rail && bullet.pierce > 0) {
+                    bullet.pierce -= 1;
+                } else {
+                    bullet.age = 999.0f;
+                }
                 if (enemy.hp <= 0.0f) {
-                    spawn_explosion(battle, enemy.pos, 10);
-                    maybe_spawn_enemy_gold(battle, enemy, true);
-                    maybe_spawn_enemy_drop(battle, enemy);
+                    kill_enemy(battle, enemy);
                     dead = true;
                 }
                 break;
@@ -148,6 +218,9 @@ void resolve_damage(BattleState& battle, Assets& assets) {
     }
 
     battle.enemies = std::move(surviving_enemies);
+    for (const ExplosionEvent& explosion : explosions) {
+        apply_explosion_damage(battle, explosion);
+    }
     battle.player_bullets.erase(
         std::remove_if(battle.player_bullets.begin(), battle.player_bullets.end(),
                        [](const PlayerBullet& bullet) { return bullet.age > 900.0f; }),

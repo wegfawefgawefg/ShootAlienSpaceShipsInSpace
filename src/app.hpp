@@ -12,6 +12,7 @@ struct App {
     Assets assets{};
     SessionState session{};
     bool running{true};
+    bool mouse_left_down{false};
     Uint64 last_counter{0};
 };
 

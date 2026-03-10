@@ -1,10 +1,12 @@
 #include "level_flow.hpp"
 
+#include "battle_render.hpp"
 #include "damage.hpp"
 #include "enemy_behavior.hpp"
 #include "level_data.hpp"
 #include "pickups.hpp"
 #include "player_weapons.hpp"
+#include "shop.hpp"
 
 #include <SDL2/SDL_mixer.h>
 #include <algorithm>
@@ -100,6 +102,8 @@ void reset_battle(BattleState& battle, Assets& assets) {
     battle.pickups.clear();
     battle.gold_pickups.clear();
     battle.collected_pickups.clear();
+    battle.weapon_stash.clear();
+    battle.shop_offers.clear();
     seed_default_weapons(battle);
     populate_starfield(battle);
     begin_level_transition(battle, assets, 0);
@@ -228,6 +232,54 @@ void session_handle_event(SessionState& session, Assets& assets, const SDL_Event
     }
 
     if (session.scene == SceneMode::Battle) {
+        if (session.battle.phase == BattlePhase::Shop) {
+            if (scancode == SDL_SCANCODE_TAB) {
+                session.battle.inventory_open = !session.battle.inventory_open;
+                return;
+            }
+            if (session.battle.inventory_open) {
+                if (scancode == SDL_SCANCODE_UP || scancode == SDL_SCANCODE_W) {
+                    session.battle.inventory_selection =
+                        std::max(0, session.battle.inventory_selection - 1);
+                } else if (scancode == SDL_SCANCODE_DOWN || scancode == SDL_SCANCODE_S) {
+                    session.battle.inventory_selection += 1;
+                } else if (scancode == SDL_SCANCODE_PAGEUP) {
+                    session.battle.inventory_selection =
+                        std::max(0, session.battle.inventory_selection - 5);
+                } else if (scancode == SDL_SCANCODE_PAGEDOWN) {
+                    session.battle.inventory_selection += 5;
+                } else if (scancode == SDL_SCANCODE_RETURN || scancode == SDL_SCANCODE_E ||
+                           scancode == SDL_SCANCODE_SPACE) {
+                    move_selected_inventory_item(session.battle);
+                } else if (scancode == SDL_SCANCODE_X || scancode == SDL_SCANCODE_DELETE ||
+                           scancode == SDL_SCANCODE_BACKSPACE) {
+                    sell_selected_inventory_item(session.battle);
+                }
+                return;
+            }
+
+            if (scancode == SDL_SCANCODE_LEFT || scancode == SDL_SCANCODE_A ||
+                scancode == SDL_SCANCODE_UP || scancode == SDL_SCANCODE_W) {
+                session.battle.shop_selection = std::max(0, session.battle.shop_selection - 1);
+            } else if (scancode == SDL_SCANCODE_RIGHT || scancode == SDL_SCANCODE_D ||
+                       scancode == SDL_SCANCODE_DOWN || scancode == SDL_SCANCODE_S) {
+                session.battle.shop_selection += 1;
+            } else if (scancode == SDL_SCANCODE_R) {
+                if (session.battle.gold >= session.battle.shop_reroll_cost) {
+                    session.battle.gold -= session.battle.shop_reroll_cost;
+                    reroll_shop(session.battle);
+                    session.battle.shop_reroll_cost += 3;
+                }
+            } else if (scancode == SDL_SCANCODE_RETURN || scancode == SDL_SCANCODE_SPACE) {
+                buy_selected_shop_offer(session.battle);
+            } else if (scancode == SDL_SCANCODE_N) {
+                advance_from_shop(session.battle, assets);
+            } else if (scancode == SDL_SCANCODE_ESCAPE || scancode == SDL_SCANCODE_Q) {
+                switch_to_title(session, assets);
+            }
+            return;
+        }
+
         if (scancode == SDL_SCANCODE_TAB) {
             session.battle.inventory_open = !session.battle.inventory_open;
             return;
@@ -253,8 +305,55 @@ void session_handle_event(SessionState& session, Assets& assets, const SDL_Event
     }
 }
 
+void session_handle_pointer(SessionState& session, Assets& assets, const ScreenLayout& layout,
+                            float x, float y, bool left_pressed) {
+    (void)assets;
+
+    if (session.scene != SceneMode::Battle) {
+        return;
+    }
+
+    if (session.battle.phase == BattlePhase::Shop) {
+        if (session.battle.inventory_open) {
+            const int hovered = inventory_selectable_index_at(session.battle, layout, x, y,
+                                                              session.battle.inventory_selection);
+            if (hovered >= 0) {
+                session.battle.inventory_selection = hovered;
+            }
+            if (left_pressed && hovered >= 0) {
+                session.battle.inventory_selection = hovered;
+            }
+            return;
+        }
+
+        const int hovered = shop_offer_index_at(session.battle, layout, x, y);
+        if (hovered >= 0) {
+            session.battle.shop_selection = hovered;
+            if (left_pressed) {
+                buy_selected_shop_offer(session.battle);
+            }
+        }
+        return;
+    }
+
+    if (session.battle.inventory_open) {
+        const int hovered = inventory_selectable_index_at(session.battle, layout, x, y,
+                                                          session.battle.inventory_selection);
+        if (hovered >= 0) {
+            session.battle.inventory_selection = hovered;
+        }
+    }
+}
+
 void session_update(SessionState& session, Assets& assets, float dt) {
     if (session.scene != SceneMode::Battle) {
+        return;
+    }
+    update_camera(session.battle, dt);
+    update_warp(session.battle, dt);
+    update_starfield(session.battle, dt);
+
+    if (session.battle.phase == BattlePhase::Shop) {
         return;
     }
     if (session.battle.inventory_open) {
@@ -276,9 +375,6 @@ void session_update(SessionState& session, Assets& assets, float dt) {
     session.input.shoot_pressed = shoot_now && !session.input.shoot;
     session.input.shoot = shoot_now;
 
-    update_camera(session.battle, dt);
-    update_warp(session.battle, dt);
-    update_starfield(session.battle, dt);
     if (session.battle.can_shoot && session.battle.player_active) {
         fire_player_weapons(session.battle, assets, session.input.shoot_pressed,
                             session.input.shoot);
@@ -316,9 +412,7 @@ void session_update(SessionState& session, Assets& assets, float dt) {
                 session.battle.gold_gain_flash = 1.0f;
             }
             if (!spawn_next_wave(session.battle)) {
-                begin_level_transition(session.battle, assets,
-                                       (session.battle.current_level_index + 1) %
-                                           static_cast<int>(levels().size()));
+                enter_shop(session.battle);
             }
         }
     }

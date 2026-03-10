@@ -66,6 +66,12 @@ const char* weapon_type_name(WeaponType type) {
         return "basic";
     case WeaponType::Missile:
         return "missile";
+    case WeaponType::Rail:
+        return "rail";
+    case WeaponType::Arc:
+        return "arc";
+    case WeaponType::Mine:
+        return "mine";
     }
     return "?";
 }
@@ -380,6 +386,7 @@ struct InventoryEntry {
     std::string desc{};
     int icon_tile{0};
     int weapon_index{-1};
+    int stash_index{-1};
     int pickup_def_index{-1};
 };
 
@@ -442,6 +449,21 @@ std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
         rows.push_back({true, {}, entry});
     }
 
+    rows.push_back({false, "Stash", {}});
+    for (std::size_t i = 0; i < battle.weapon_stash.size(); ++i) {
+        const Weapon& weapon = battle.weapon_stash[i];
+        InventoryEntry entry{};
+        entry.section = "Stash";
+        entry.name = std::to_string(static_cast<int>(i + 1)) + ". " + weapon.name;
+        entry.subtitle =
+            std::string(fixture_name(weapon.fixture)) + (weapon.automatic ? " auto" : " semi");
+        entry.detail = "Stored weapon";
+        entry.desc = "Will not fire until moved into an active slot.";
+        entry.icon_tile = weapon.projectile_tile;
+        entry.stash_index = static_cast<int>(i);
+        rows.push_back({true, {}, entry});
+    }
+
     rows.push_back({false, "Weapon Upgrades", {}});
     for (const auto& [def_index, count] : counted_pickups(battle, is_weapon_mod_pickup)) {
         const PickupDef& def = pickup_def(def_index);
@@ -482,9 +504,18 @@ std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
     return rows;
 }
 
-void render_inventory_overlay(const SessionState& session, const Assets& assets,
-                              SDL_Renderer* renderer, const ScreenLayout& layout) {
-    const std::vector<InventoryRow> rows = build_inventory_rows(session.battle);
+SDL_FRect inventory_list_panel_rect(const ScreenLayout& layout) {
+    return {layout.scene_rect.x + INVENTORY_GAP, layout.scene_rect.y + INVENTORY_GAP, 360.0f,
+            layout.scene_rect.h - INVENTORY_GAP * 2.0f};
+}
+
+SDL_FRect inventory_detail_panel_rect(const ScreenLayout& layout) {
+    const SDL_FRect list_panel = inventory_list_panel_rect(layout);
+    return {list_panel.x + list_panel.w + 20.0f, list_panel.y,
+            layout.scene_rect.w - (list_panel.w + INVENTORY_GAP * 3.0f + 20.0f), list_panel.h};
+}
+
+int selected_row_from_selection(const std::vector<InventoryRow>& rows, int selection) {
     int selectable_count = 0;
     for (const InventoryRow& row : rows) {
         if (row.selectable) {
@@ -492,42 +523,56 @@ void render_inventory_overlay(const SessionState& session, const Assets& assets,
         }
     }
     const int clamped_selection =
-        selectable_count > 0
-            ? static_cast<int>(clampf(static_cast<float>(session.battle.inventory_selection), 0.0f,
-                                      static_cast<float>(selectable_count - 1)))
-            : 0;
+        selectable_count > 0 ? static_cast<int>(clampf(static_cast<float>(selection), 0.0f,
+                                                       static_cast<float>(selectable_count - 1)))
+                             : 0;
 
-    int selected_row = -1;
     int running_selectable = 0;
     for (std::size_t i = 0; i < rows.size(); ++i) {
         if (!rows[i].selectable) {
             continue;
         }
         if (running_selectable == clamped_selection) {
-            selected_row = static_cast<int>(i);
+            return static_cast<int>(i);
         }
         running_selectable += 1;
     }
-    if (selected_row < 0) {
-        for (std::size_t i = 0; i < rows.size(); ++i) {
-            if (rows[i].selectable) {
-                selected_row = static_cast<int>(i);
-                break;
-            }
+
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        if (rows[i].selectable) {
+            return static_cast<int>(i);
         }
     }
+    return -1;
+}
+
+int selectable_index_for_row(const std::vector<InventoryRow>& rows, int target_row) {
+    int running_selectable = 0;
+    for (int row_index = 0; row_index < static_cast<int>(rows.size()); ++row_index) {
+        if (!rows[static_cast<std::size_t>(row_index)].selectable) {
+            continue;
+        }
+        if (row_index == target_row) {
+            return running_selectable;
+        }
+        running_selectable += 1;
+    }
+    return -1;
+}
+
+void render_inventory_overlay(const SessionState& session, const Assets& assets,
+                              SDL_Renderer* renderer, const ScreenLayout& layout) {
+    const std::vector<InventoryRow> rows = build_inventory_rows(session.battle);
+    const int selected_row = selected_row_from_selection(rows, session.battle.inventory_selection);
+    const int clamped_selection = std::max(0, selectable_index_for_row(rows, selected_row));
 
     const SDL_FRect backdrop = {layout.scene_rect.x, layout.scene_rect.y, layout.scene_rect.w,
                                 layout.scene_rect.h};
     SDL_SetRenderDrawColor(renderer, 4, 8, 14, 210);
     SDL_RenderFillRectF(renderer, &backdrop);
 
-    const SDL_FRect list_panel = {layout.scene_rect.x + INVENTORY_GAP,
-                                  layout.scene_rect.y + INVENTORY_GAP, 360.0f,
-                                  layout.scene_rect.h - INVENTORY_GAP * 2.0f};
-    const SDL_FRect detail_panel = {
-        list_panel.x + list_panel.w + 20.0f, list_panel.y,
-        layout.scene_rect.w - (list_panel.w + INVENTORY_GAP * 3.0f + 20.0f), list_panel.h};
+    const SDL_FRect list_panel = inventory_list_panel_rect(layout);
+    const SDL_FRect detail_panel = inventory_detail_panel_rect(layout);
     SDL_SetRenderDrawColor(renderer, 8, 16, 28, 244);
     SDL_RenderFillRectF(renderer, &list_panel);
     SDL_RenderFillRectF(renderer, &detail_panel);
@@ -537,8 +582,12 @@ void render_inventory_overlay(const SessionState& session, const Assets& assets,
     SDL_Color accent{255, 214, 128, 255};
     draw_text(renderer, assets.ui_font_large, "Inventory", list_panel.x + 12.0f,
               list_panel.y + 8.0f, primary);
-    draw_text(renderer, assets.ui_font_small, "Tab close  Up/Down select  PgUp/PgDn jump",
-              detail_panel.x + 12.0f, detail_panel.y + 12.0f, secondary);
+    const std::string controls =
+        session.battle.phase == BattlePhase::Shop
+            ? "Tab close  Up/Down select  Enter move  X sell  mouse hover/click"
+            : "Tab close  Up/Down select  PgUp/PgDn jump  mouse hover";
+    draw_text(renderer, assets.ui_font_small, controls, detail_panel.x + 12.0f,
+              detail_panel.y + 12.0f, secondary);
 
     const float row_h = 24.0f;
     const float list_y0 = list_panel.y + 44.0f;
@@ -636,6 +685,33 @@ void render_inventory_overlay(const SessionState& session, const Assets& assets,
                     detail_y += 18.0f;
                 }
             }
+        } else if (selected->stash_index >= 0) {
+            const Weapon& weapon =
+                session.battle.weapon_stash[static_cast<std::size_t>(selected->stash_index)];
+            const std::array<std::string, 8> lines = {
+                "Stored Weapon",
+                "Type: " + std::string(weapon_type_name(weapon.type)),
+                "Trigger: " + std::string(weapon.automatic ? "Automatic" : "Semi-auto"),
+                "Fixture: " + std::string(fixture_name(weapon.fixture)),
+                "Damage: " + std::to_string(weapon.damage).substr(0, 5),
+                "Cooldown: " + std::to_string(weapon.cooldown).substr(0, 5),
+                "Projectile Count: " + std::to_string(weapon.projectile_count),
+                "Projectile Speed: " + std::to_string(static_cast<int>(weapon.projectile_speed)),
+            };
+            for (const std::string& line : lines) {
+                draw_text(renderer, assets.ui_font_small, line, detail_panel.x + 12.0f, detail_y,
+                          primary);
+                detail_y += 18.0f;
+            }
+            draw_text(renderer, assets.ui_font_small,
+                      session.battle.weapons.size() <
+                              static_cast<std::size_t>(session.battle.weapon_slots)
+                          ? "Enter to equip into an active slot"
+                          : "Free an active slot to equip this weapon",
+                      detail_panel.x + 12.0f, detail_y + 8.0f, secondary);
+            detail_y += 28.0f;
+            draw_text(renderer, assets.ui_font_small, "Sell from shop with X / Delete",
+                      detail_panel.x + 12.0f, detail_y, secondary);
         } else {
             draw_text(renderer, assets.ui_font_small, selected->detail, detail_panel.x + 12.0f,
                       detail_y, primary);
@@ -646,10 +722,131 @@ void render_inventory_overlay(const SessionState& session, const Assets& assets,
     }
 }
 
+void render_shop_overlay(const SessionState& session, const Assets& assets, SDL_Renderer* renderer,
+                         const ScreenLayout& layout) {
+    const SDL_FRect backdrop = {layout.scene_rect.x, layout.scene_rect.y, layout.scene_rect.w,
+                                layout.scene_rect.h};
+    SDL_SetRenderDrawColor(renderer, 6, 10, 18, 220);
+    SDL_RenderFillRectF(renderer, &backdrop);
+
+    SDL_Color primary{232, 238, 246, 255};
+    SDL_Color secondary{168, 182, 200, 255};
+    SDL_Color accent{255, 214, 128, 255};
+    SDL_Color sold_color{120, 130, 150, 255};
+
+    const SDL_FRect panel = {layout.scene_rect.x + 24.0f, layout.scene_rect.y + 24.0f,
+                             layout.scene_rect.w - 48.0f, layout.scene_rect.h - 48.0f};
+    SDL_SetRenderDrawColor(renderer, 8, 16, 28, 244);
+    SDL_RenderFillRectF(renderer, &panel);
+    draw_text(renderer, assets.ui_font_large, "Shop", panel.x + 14.0f, panel.y + 10.0f, primary);
+    draw_text(renderer, assets.ui_font_small,
+              "Enter/click buy  R reroll  N next level  Tab inventory  mouse hover",
+              panel.x + 110.0f, panel.y + 16.0f, secondary);
+    draw_ui_sprite(renderer, assets.coins, 1, panel.x + panel.w - 86.0f, panel.y + 22.0f, 2.0f);
+    draw_text(renderer, assets.ui_font_small, std::to_string(session.battle.gold),
+              panel.x + panel.w - 70.0f, panel.y + 14.0f, accent);
+
+    const float card_y = panel.y + 56.0f;
+    const float card_w = 112.0f;
+    const float gap = 12.0f;
+    const SDL_FRect detail_panel = {panel.x + 16.0f, card_y + 168.0f, panel.w - 32.0f,
+                                    panel.h - (card_y - panel.y) - 184.0f};
+    for (std::size_t i = 0; i < session.battle.shop_offers.size(); ++i) {
+        const ShopOffer& offer = session.battle.shop_offers[i];
+        const PickupDef& def = pickup_def(offer.pickup_def_index);
+        const float x = panel.x + 16.0f + static_cast<float>(i) * (card_w + gap);
+        const SDL_FRect card = {x, card_y, card_w, 146.0f};
+        const bool selected = static_cast<int>(i) == session.battle.shop_selection;
+        SDL_SetRenderDrawColor(renderer, selected ? 28 : 16, selected ? 42 : 24, selected ? 66 : 38,
+                               255);
+        SDL_RenderFillRectF(renderer, &card);
+        draw_ui_sprite(renderer, assets.particles, def.icon_tile, x + card_w * 0.5f, card_y + 22.0f,
+                       2.2f);
+        draw_text(renderer, assets.ui_font_small, def.name, x + 8.0f, card_y + 42.0f,
+                  offer.sold ? sold_color : primary);
+        draw_text(renderer, assets.ui_font_small, pickup_tier_name(def.tier), x + 8.0f,
+                  card_y + 58.0f, secondary);
+        draw_text(renderer, assets.ui_font_small, def.desc, x + 8.0f, card_y + 76.0f,
+                  offer.sold ? sold_color : secondary);
+        draw_ui_sprite(renderer, assets.coins, 0, x + 12.0f, card_y + 126.0f, 1.4f);
+        const std::string price = offer.sold ? "sold" : std::to_string(offer.price);
+        draw_text(renderer, assets.ui_font_small, price, x + 22.0f, card_y + 118.0f,
+                  offer.sold ? sold_color : accent);
+    }
+
+    SDL_SetRenderDrawColor(renderer, 10, 20, 34, 255);
+    SDL_RenderFillRectF(renderer, &detail_panel);
+    if (!session.battle.shop_offers.empty()) {
+        const int selected_offer_index =
+            std::clamp(session.battle.shop_selection, 0,
+                       static_cast<int>(session.battle.shop_offers.size()) - 1);
+        const ShopOffer& selected_offer =
+            session.battle.shop_offers[static_cast<std::size_t>(selected_offer_index)];
+        const PickupDef& def = pickup_def(selected_offer.pickup_def_index);
+        float detail_y = detail_panel.y + 12.0f;
+        draw_ui_sprite(renderer, assets.particles, def.icon_tile, detail_panel.x + 16.0f,
+                       detail_y + 14.0f, 2.2f);
+        draw_text(renderer, assets.ui_font_large, def.name, detail_panel.x + 34.0f, detail_y - 2.0f,
+                  primary);
+        detail_y += 26.0f;
+        draw_text(
+            renderer, assets.ui_font_small,
+            std::string(pickup_tier_name(def.tier)) + " / " +
+                (selected_offer.sold ? "sold" : std::to_string(selected_offer.price) + " gold"),
+            detail_panel.x + 12.0f, detail_y, accent);
+        detail_y += 24.0f;
+        draw_text(renderer, assets.ui_font_small, def.desc, detail_panel.x + 12.0f, detail_y,
+                  primary);
+        detail_y += 22.0f;
+        if (def.effect == PickupEffectType::GrantWeapon) {
+            const Weapon& weapon = def.weapon;
+            const std::array<std::string, 8> lines = {
+                "Weapon: " + weapon.name,
+                "Type: " + std::string(weapon_type_name(weapon.type)),
+                "Trigger: " + std::string(weapon.automatic ? "Automatic" : "Semi-auto"),
+                "Fixture: " + std::string(fixture_name(weapon.fixture)),
+                "Damage: " + std::to_string(weapon.damage).substr(0, 5),
+                "Cooldown: " + std::to_string(weapon.cooldown).substr(0, 5),
+                "Projectile Count: " + std::to_string(weapon.projectile_count),
+                "Projectile Speed: " + std::to_string(static_cast<int>(weapon.projectile_speed)),
+            };
+            for (const std::string& line : lines) {
+                draw_text(renderer, assets.ui_font_small, line, detail_panel.x + 12.0f, detail_y,
+                          secondary);
+                detail_y += 18.0f;
+            }
+        } else {
+            draw_text(renderer, assets.ui_font_small, "Upgrade / augment", detail_panel.x + 12.0f,
+                      detail_y, secondary);
+            detail_y += 18.0f;
+            draw_text(renderer, assets.ui_font_small,
+                      "Applied now or attached to a matching weapon.", detail_panel.x + 12.0f,
+                      detail_y, secondary);
+        }
+    }
+
+    const float info_y = detail_panel.y + detail_panel.h + 8.0f;
+    draw_text(renderer, assets.ui_font_small,
+              "Active " + std::to_string(session.battle.weapons.size()) + "/" +
+                  std::to_string(session.battle.weapon_slots),
+              panel.x + 16.0f, info_y, primary);
+    draw_text(renderer, assets.ui_font_small,
+              "Stash " + std::to_string(session.battle.weapon_stash.size()) + "/" +
+                  std::to_string(session.battle.weapon_stash_slots),
+              panel.x + 136.0f, info_y, primary);
+    draw_text(renderer, assets.ui_font_small,
+              "Reroll " + std::to_string(session.battle.shop_reroll_cost), panel.x + 256.0f, info_y,
+              accent);
+}
+
 void render_battle_overlay(const SessionState& session, const Assets& assets,
                            SDL_Renderer* renderer, const ScreenLayout& layout) {
     if (session.battle.inventory_open) {
         render_inventory_overlay(session, assets, renderer, layout);
+        return;
+    }
+    if (session.battle.phase == BattlePhase::Shop) {
+        render_shop_overlay(session, assets, renderer, layout);
         return;
     }
 
@@ -750,6 +947,50 @@ void render_battle_overlay(const SessionState& session, const Assets& assets,
 }
 
 } // namespace
+
+int inventory_selectable_index_at(const BattleState& battle, const ScreenLayout& layout, float x,
+                                  float y, int current_selection) {
+    const std::vector<InventoryRow> rows = build_inventory_rows(battle);
+    const int selected_row = selected_row_from_selection(rows, current_selection);
+    const SDL_FRect list_panel = inventory_list_panel_rect(layout);
+    const float row_h = 24.0f;
+    const float list_y0 = list_panel.y + 44.0f;
+    const int visible_rows = std::max(1, static_cast<int>((list_panel.h - 52.0f) / row_h));
+    int first_row = 0;
+    if (selected_row >= 0) {
+        first_row = std::max(0, selected_row - visible_rows / 2);
+        first_row = std::min(first_row, std::max(0, static_cast<int>(rows.size()) - visible_rows));
+    }
+
+    if (x < list_panel.x || x > list_panel.x + list_panel.w || y < list_y0) {
+        return -1;
+    }
+    const int hovered_visible_row = static_cast<int>((y - list_y0) / row_h);
+    const int row_index = first_row + hovered_visible_row;
+    if (row_index < 0 || row_index >= static_cast<int>(rows.size())) {
+        return -1;
+    }
+    if (!rows[static_cast<std::size_t>(row_index)].selectable) {
+        return -1;
+    }
+    return selectable_index_for_row(rows, row_index);
+}
+
+int shop_offer_index_at(const BattleState& battle, const ScreenLayout& layout, float x, float y) {
+    const SDL_FRect panel = {layout.scene_rect.x + 24.0f, layout.scene_rect.y + 24.0f,
+                             layout.scene_rect.w - 48.0f, layout.scene_rect.h - 48.0f};
+    const float card_y = panel.y + 56.0f;
+    const float card_w = 112.0f;
+    const float gap = 12.0f;
+    for (std::size_t i = 0; i < battle.shop_offers.size(); ++i) {
+        const float card_x = panel.x + 16.0f + static_cast<float>(i) * (card_w + gap);
+        const SDL_FRect card = {card_x, card_y, card_w, 146.0f};
+        if (x >= card.x && x <= card.x + card.w && y >= card.y && y <= card.y + card.h) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
 
 ScreenLayout make_screen_layout(int window_width, int window_height) {
     const float width = static_cast<float>(window_width);

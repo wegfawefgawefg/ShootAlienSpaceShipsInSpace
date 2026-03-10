@@ -38,6 +38,13 @@ From here, the C++ version intentionally grows past the Python prototype.
 - The inventory view should eventually show per-weapon attached upgrades, not only a flat upgrade list.
 - Stat readouts should prefer vertical, spelled-out labels over compressed abbreviations.
 - Mouse hover and keyboard focus should both expose detailed descriptions and derived numbers.
+- The shop should be a real between-level phase, not just an implicit reward screen.
+- The shop should support both keyboard and mouse:
+  - hover to inspect
+  - click / Enter to buy
+  - reroll for gold
+  - inspect current loadout without leaving the shop
+  - equip / stash / sell during the shop phase
 
 ## Controls
 
@@ -159,6 +166,14 @@ Between levels, the long-term structure should shift toward:
 - reward summary
 - shop
 - next level transition
+
+Current implemented slice:
+
+- combat -> boss -> shop -> next level
+- gold from damage / kills / leftover timer
+- active weapon slots and a limited stash
+- active weapon selling and stash refill
+- inventory inspection while in combat or shop
 
 Hardcoded C++ data is fine for now. JSON is optional later if it becomes useful.
 

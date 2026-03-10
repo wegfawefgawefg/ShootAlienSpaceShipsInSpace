@@ -21,6 +21,7 @@ enum class SceneMode {
 enum class BattlePhase {
     LevelIntro,
     Active,
+    Shop,
 };
 
 enum class EnemyBehavior {
@@ -44,6 +45,9 @@ enum class EnemyFacing {
 enum class WeaponType {
     Basic,
     Missile,
+    Rail,
+    Arc,
+    Mine,
 };
 
 enum class WeaponFixture {
@@ -79,6 +83,7 @@ struct CameraState {
 struct PlayerBullet {
     Vec2 pos{};
     Vec2 vel{};
+    Vec2 base_dir{};
     float age{0.0f};
     float radius{1.25f};
     float damage{1.0f};
@@ -86,7 +91,13 @@ struct PlayerBullet {
     float base_height{3.0f};
     float height{3.0f};
     float target_height{3.0f};
+    float homing_turn{0.0f};
+    float wave_amplitude{0.0f};
+    float wave_frequency{0.0f};
+    float stop_age{0.0f};
+    int pierce{0};
     int tile{1};
+    WeaponType type{WeaponType::Basic};
 };
 
 struct EnemyBullet {
@@ -199,6 +210,12 @@ struct GoldActor {
     bool guided{true};
 };
 
+struct ShopOffer {
+    int pickup_def_index{-1};
+    int price{0};
+    bool sold{false};
+};
+
 struct LevelSpawnDef {
     int type_id{0};
     EnemyBehavior behavior{EnemyBehavior::Straight};
@@ -237,6 +254,8 @@ struct BattleState {
     std::vector<GoldActor> gold_pickups{};
     std::vector<Star> stars{};
     std::vector<int> collected_pickups{};
+    std::vector<Weapon> weapon_stash{};
+    std::vector<ShopOffer> shop_offers{};
     CameraState camera{};
     float warp_level{0.0f};
     float level_timer{0.0f};
@@ -261,6 +280,9 @@ struct BattleState {
     int inventory_selection{0};
     int gold{0};
     int weapon_slots{5};
+    int weapon_stash_slots{5};
+    int shop_selection{0};
+    int shop_reroll_cost{8};
     BattlePhase phase{BattlePhase::LevelIntro};
     std::array<int, 2> music_channels{{-1, -1}};
 };

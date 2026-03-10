@@ -233,12 +233,14 @@ struct BattleState {
     bool can_shoot{false};
     bool player_active{true};
     bool debug_colliders{true};
+    bool inventory_open{false};
     bool wave_has_timer{false};
     int lives{3};
     int current_level_index{0};
     int current_wave_index{0};
     int active_wave_tag{0};
     int hitstop_frames{0};
+    int inventory_selection{0};
     BattlePhase phase{BattlePhase::LevelIntro};
     std::array<int, 2> music_channels{{-1, -1}};
 };

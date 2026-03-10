@@ -34,6 +34,10 @@ From here, the C++ version intentionally grows past the Python prototype.
 - Keep the world pixelated and the overlay crisp
 - The world view should integer-scale to fill the window, not sit in a small floating center box.
 - UI should stay compact and sit as full-resolution overlays in corners instead of stealing large gutters.
+- `Tab` should open a paused inventory / inspection view with categorized lists and detailed stat readouts.
+- The inventory view should eventually show per-weapon attached upgrades, not only a flat upgrade list.
+- Stat readouts should prefer vertical, spelled-out labels over compressed abbreviations.
+- Mouse hover and keyboard focus should both expose detailed descriptions and derived numbers.
 
 ## Controls
 
@@ -147,6 +151,14 @@ UI should show:
 - current level
 - current wave
 - remaining wave timer when relevant
+
+Between levels, the long-term structure should shift toward:
+
+- combat
+- boss
+- reward summary
+- shop
+- next level transition
 
 Hardcoded C++ data is fine for now. JSON is optional later if it becomes useful.
 

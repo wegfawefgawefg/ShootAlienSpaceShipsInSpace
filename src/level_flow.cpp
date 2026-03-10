@@ -92,6 +92,8 @@ void reset_battle(BattleState& battle, Assets& assets) {
     battle.player_active = true;
     battle.lives = 3;
     battle.hitstop_frames = 0;
+    battle.inventory_open = false;
+    battle.inventory_selection = 0;
     battle.particles.clear();
     battle.pickups.clear();
     battle.collected_pickups.clear();
@@ -223,6 +225,24 @@ void session_handle_event(SessionState& session, Assets& assets, const SDL_Event
     }
 
     if (session.scene == SceneMode::Battle) {
+        if (scancode == SDL_SCANCODE_TAB) {
+            session.battle.inventory_open = !session.battle.inventory_open;
+            return;
+        }
+        if (session.battle.inventory_open) {
+            if (scancode == SDL_SCANCODE_UP || scancode == SDL_SCANCODE_W) {
+                session.battle.inventory_selection =
+                    std::max(0, session.battle.inventory_selection - 1);
+            } else if (scancode == SDL_SCANCODE_DOWN || scancode == SDL_SCANCODE_S) {
+                session.battle.inventory_selection += 1;
+            } else if (scancode == SDL_SCANCODE_PAGEUP) {
+                session.battle.inventory_selection =
+                    std::max(0, session.battle.inventory_selection - 5);
+            } else if (scancode == SDL_SCANCODE_PAGEDOWN) {
+                session.battle.inventory_selection += 5;
+            }
+            return;
+        }
         if (scancode == SDL_SCANCODE_ESCAPE || scancode == SDL_SCANCODE_Q) {
             switch_to_title(session, assets);
             return;
@@ -232,6 +252,9 @@ void session_handle_event(SessionState& session, Assets& assets, const SDL_Event
 
 void session_update(SessionState& session, Assets& assets, float dt) {
     if (session.scene != SceneMode::Battle) {
+        return;
+    }
+    if (session.battle.inventory_open) {
         return;
     }
 

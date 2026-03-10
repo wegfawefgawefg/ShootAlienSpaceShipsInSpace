@@ -14,6 +14,7 @@ constexpr float LABEL_DURATION = 1.2f;
 constexpr float PANEL_GAP = 14.0f;
 constexpr float LEFT_PANEL_WIDTH = 94.0f;
 constexpr float RIGHT_PANEL_WIDTH = 220.0f;
+constexpr float INVENTORY_GAP = 24.0f;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -57,6 +58,28 @@ const char* behavior_name(EnemyBehavior behavior) {
         return "boss charge";
     }
     return "unknown";
+}
+
+const char* weapon_type_name(WeaponType type) {
+    switch (type) {
+    case WeaponType::Basic:
+        return "basic";
+    case WeaponType::Missile:
+        return "missile";
+    }
+    return "?";
+}
+
+const char* fixture_name(WeaponFixture fixture) {
+    switch (fixture) {
+    case WeaponFixture::Center:
+        return "center";
+    case WeaponFixture::EvenlySpread:
+        return "even";
+    case WeaponFixture::Splayed:
+        return "splay";
+    }
+    return "?";
 }
 
 const char* boss_group_name(int group_index) {
@@ -336,8 +359,242 @@ const Enemy* active_boss(const BattleState& battle) {
     return nullptr;
 }
 
+struct InventoryEntry {
+    std::string section{};
+    std::string name{};
+    std::string subtitle{};
+    std::string detail{};
+    std::string desc{};
+    int icon_tile{0};
+};
+
+struct InventoryRow {
+    bool selectable{false};
+    std::string header{};
+    InventoryEntry entry{};
+};
+
+bool is_weapon_mod_pickup(PickupEffectType effect) {
+    return effect == PickupEffectType::UpgradeRandomRate ||
+           effect == PickupEffectType::UpgradeRandomDamage ||
+           effect == PickupEffectType::UpgradeRandomAuto ||
+           effect == PickupEffectType::UpgradeRandomSpread;
+}
+
+bool is_ship_pickup(PickupEffectType effect) {
+    return effect == PickupEffectType::ExtraLife || effect == PickupEffectType::PickupMagnet ||
+           effect == PickupEffectType::GlassReactor || effect == PickupEffectType::StabilityFins;
+}
+
+std::vector<std::pair<int, int>> counted_pickups(const BattleState& battle,
+                                                 bool (*predicate)(PickupEffectType)) {
+    std::vector<std::pair<int, int>> counted;
+    for (int def_index : battle.collected_pickups) {
+        const PickupDef& def = pickup_def(def_index);
+        if (!predicate(def.effect)) {
+            continue;
+        }
+
+        auto it = std::find_if(counted.begin(), counted.end(),
+                               [&](const auto& item) { return item.first == def_index; });
+        if (it == counted.end()) {
+            counted.push_back({def_index, 1});
+        } else {
+            it->second += 1;
+        }
+    }
+    return counted;
+}
+
+std::vector<InventoryRow> build_inventory_rows(const BattleState& battle) {
+    std::vector<InventoryRow> rows;
+    rows.push_back({false, "Weapons", {}});
+    for (std::size_t i = 0; i < battle.weapons.size(); ++i) {
+        const Weapon& weapon = battle.weapons[i];
+        InventoryEntry entry{};
+        entry.section = "Weapons";
+        entry.name = std::to_string(static_cast<int>(i + 1)) + ". " + weapon_type_name(weapon.type);
+        entry.subtitle =
+            std::string(fixture_name(weapon.fixture)) + (weapon.automatic ? " auto" : " semi");
+        entry.detail = "dmg " + std::to_string(weapon.damage).substr(0, 4) + " cd " +
+                       std::to_string(weapon.cooldown).substr(0, 4) + " cnt " +
+                       std::to_string(weapon.projectile_count);
+        entry.desc = "spd " + std::to_string(static_cast<int>(weapon.projectile_speed)) + " life " +
+                     std::to_string(weapon.projectile_life).substr(0, 4) + " rad " +
+                     std::to_string(weapon.projectile_radius).substr(0, 4);
+        entry.icon_tile = weapon.projectile_tile;
+        rows.push_back({true, {}, entry});
+    }
+
+    rows.push_back({false, "Weapon Upgrades", {}});
+    for (const auto& [def_index, count] : counted_pickups(battle, is_weapon_mod_pickup)) {
+        const PickupDef& def = pickup_def(def_index);
+        InventoryEntry entry{};
+        entry.section = "Weapon Upgrades";
+        entry.name = def.name + (count > 1 ? " x" + std::to_string(count) : "");
+        entry.subtitle = pickup_tier_name(def.tier);
+        entry.detail = def.desc;
+        entry.desc = "Affects existing guns.";
+        entry.icon_tile = def.icon_tile;
+        rows.push_back({true, {}, entry});
+    }
+
+    rows.push_back({false, "Ship Augments", {}});
+    for (const auto& [def_index, count] : counted_pickups(battle, is_ship_pickup)) {
+        const PickupDef& def = pickup_def(def_index);
+        InventoryEntry entry{};
+        entry.section = "Ship Augments";
+        entry.name = def.name + (count > 1 ? " x" + std::to_string(count) : "");
+        entry.subtitle = pickup_tier_name(def.tier);
+        entry.detail = def.desc;
+        entry.desc = "Run-wide ship effect.";
+        entry.icon_tile = def.icon_tile;
+        rows.push_back({true, {}, entry});
+    }
+
+    rows.push_back({false, "Wingmen", {}});
+    InventoryEntry wingmen{};
+    wingmen.section = "Wingmen";
+    wingmen.name = "No wingmen yet";
+    wingmen.subtitle = "planned";
+    wingmen.detail = "Wingmen will live here once added.";
+    wingmen.desc = "They will get their own weapons and support stats.";
+    wingmen.icon_tile = 31;
+    rows.push_back({true, {}, wingmen});
+    return rows;
+}
+
+void render_inventory_overlay(const SessionState& session, const Assets& assets,
+                              SDL_Renderer* renderer, const ScreenLayout& layout) {
+    const std::vector<InventoryRow> rows = build_inventory_rows(session.battle);
+    int selectable_count = 0;
+    for (const InventoryRow& row : rows) {
+        if (row.selectable) {
+            selectable_count += 1;
+        }
+    }
+    const int clamped_selection =
+        selectable_count > 0
+            ? static_cast<int>(clampf(static_cast<float>(session.battle.inventory_selection), 0.0f,
+                                      static_cast<float>(selectable_count - 1)))
+            : 0;
+
+    int selected_row = -1;
+    int running_selectable = 0;
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        if (!rows[i].selectable) {
+            continue;
+        }
+        if (running_selectable == clamped_selection) {
+            selected_row = static_cast<int>(i);
+        }
+        running_selectable += 1;
+    }
+    if (selected_row < 0) {
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (rows[i].selectable) {
+                selected_row = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    const SDL_FRect backdrop = {layout.scene_rect.x, layout.scene_rect.y, layout.scene_rect.w,
+                                layout.scene_rect.h};
+    SDL_SetRenderDrawColor(renderer, 4, 8, 14, 210);
+    SDL_RenderFillRectF(renderer, &backdrop);
+
+    const SDL_FRect list_panel = {layout.scene_rect.x + INVENTORY_GAP,
+                                  layout.scene_rect.y + INVENTORY_GAP, 360.0f,
+                                  layout.scene_rect.h - INVENTORY_GAP * 2.0f};
+    const SDL_FRect detail_panel = {
+        list_panel.x + list_panel.w + 20.0f, list_panel.y,
+        layout.scene_rect.w - (list_panel.w + INVENTORY_GAP * 3.0f + 20.0f), list_panel.h};
+    SDL_SetRenderDrawColor(renderer, 8, 16, 28, 244);
+    SDL_RenderFillRectF(renderer, &list_panel);
+    SDL_RenderFillRectF(renderer, &detail_panel);
+
+    SDL_Color primary{232, 238, 246, 255};
+    SDL_Color secondary{168, 182, 200, 255};
+    SDL_Color accent{255, 214, 128, 255};
+    draw_text(renderer, assets.ui_font_large, "Inventory", list_panel.x + 12.0f,
+              list_panel.y + 8.0f, primary);
+    draw_text(renderer, assets.ui_font_small, "Tab close  Up/Down select  PgUp/PgDn jump",
+              detail_panel.x + 12.0f, detail_panel.y + 12.0f, secondary);
+
+    const float row_h = 24.0f;
+    const float list_y0 = list_panel.y + 44.0f;
+    const int visible_rows = std::max(1, static_cast<int>((list_panel.h - 52.0f) / row_h));
+    int first_row = 0;
+    if (selected_row >= 0) {
+        first_row = std::max(0, selected_row - visible_rows / 2);
+        first_row = std::min(first_row, std::max(0, static_cast<int>(rows.size()) - visible_rows));
+    }
+
+    const InventoryEntry* selected = nullptr;
+    int selectable_index = 0;
+    for (int row_index = 0; row_index < first_row; ++row_index) {
+        if (rows[static_cast<std::size_t>(row_index)].selectable) {
+            selectable_index += 1;
+        }
+    }
+    float y = list_y0;
+    for (int row_index = first_row;
+         row_index < static_cast<int>(rows.size()) && row_index < first_row + visible_rows;
+         ++row_index) {
+        const InventoryRow& row = rows[static_cast<std::size_t>(row_index)];
+        if (!row.selectable) {
+            draw_text(renderer, assets.ui_font_small, row.header, list_panel.x + 12.0f, y, accent);
+            y += row_h;
+            continue;
+        }
+
+        const bool is_selected = selectable_index == clamped_selection;
+        if (is_selected) {
+            const SDL_FRect highlight = {list_panel.x + 8.0f, y - 2.0f, list_panel.w - 16.0f,
+                                         row_h};
+            SDL_SetRenderDrawColor(renderer, 22, 42, 68, 255);
+            SDL_RenderFillRectF(renderer, &highlight);
+            selected = &row.entry;
+        }
+        draw_ui_sprite(renderer, assets.particles, row.entry.icon_tile, list_panel.x + 18.0f,
+                       y + 8.0f, 1.4f);
+        draw_text(renderer, assets.ui_font_small, row.entry.name, list_panel.x + 32.0f, y - 1.0f,
+                  primary);
+        draw_text(renderer, assets.ui_font_small, row.entry.subtitle, list_panel.x + 32.0f,
+                  y + 11.0f, secondary);
+        y += row_h;
+        selectable_index += 1;
+    }
+
+    if (!selected) {
+        for (const InventoryRow& row : rows) {
+            if (row.selectable) {
+                selected = &row.entry;
+                break;
+            }
+        }
+    }
+
+    if (selected) {
+        draw_text(renderer, assets.ui_font_large, selected->name, detail_panel.x + 12.0f,
+                  detail_panel.y + 40.0f, primary);
+        draw_text(renderer, assets.ui_font_small, selected->section + " / " + selected->subtitle,
+                  detail_panel.x + 12.0f, detail_panel.y + 76.0f, accent);
+        draw_text(renderer, assets.ui_font_small, selected->detail, detail_panel.x + 12.0f,
+                  detail_panel.y + 104.0f, primary);
+        draw_text(renderer, assets.ui_font_small, selected->desc, detail_panel.x + 12.0f,
+                  detail_panel.y + 126.0f, secondary);
+    }
+}
+
 void render_battle_overlay(const SessionState& session, const Assets& assets,
                            SDL_Renderer* renderer, const ScreenLayout& layout) {
+    if (session.battle.inventory_open) {
+        render_inventory_overlay(session, assets, renderer, layout);
+        return;
+    }
+
     SDL_SetRenderDrawColor(renderer, 7, 14, 24, 235);
     SDL_RenderFillRectF(renderer, &layout.left_panel);
     SDL_RenderFillRectF(renderer, &layout.right_panel);

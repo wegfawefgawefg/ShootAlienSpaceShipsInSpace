@@ -9,6 +9,9 @@
 
 namespace {
 
+constexpr float TARGET_FRAME_SECONDS = 1.0f / 144.0f;
+constexpr float FIXED_STEP_SECONDS = 1.0f / 144.0f;
+
 float frame_dt(Uint64 previous, Uint64 current) {
     const Uint64 freq = SDL_GetPerformanceFrequency();
     return static_cast<float>(current - previous) / static_cast<float>(freq);
@@ -57,8 +60,7 @@ bool app_init(App& app) {
         return false;
     }
 
-    app.renderer =
-        SDL_CreateRenderer(app.window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    app.renderer = SDL_CreateRenderer(app.window, -1, SDL_RENDERER_ACCELERATED);
     if (!app.renderer) {
         app.renderer = SDL_CreateRenderer(app.window, -1, SDL_RENDERER_SOFTWARE);
     }
@@ -84,17 +86,23 @@ bool app_init(App& app) {
 }
 
 void app_run(App& app) {
+    float accumulator = 0.0f;
     while (app.running) {
+        const Uint64 frame_start = SDL_GetPerformanceCounter();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             session_handle_event(app.session, app.assets, event, app.running);
         }
 
         const Uint64 current_counter = SDL_GetPerformanceCounter();
-        const float dt = frame_dt(app.last_counter, current_counter);
+        const float dt = std::min(0.1f, frame_dt(app.last_counter, current_counter));
         app.last_counter = current_counter;
+        accumulator += dt;
 
-        session_update(app.session, app.assets, dt);
+        while (accumulator >= FIXED_STEP_SECONDS) {
+            session_update(app.session, app.assets, FIXED_STEP_SECONDS);
+            accumulator -= FIXED_STEP_SECONDS;
+        }
 
         int window_width = WINDOW_WIDTH;
         int window_height = WINDOW_HEIGHT;
@@ -110,6 +118,12 @@ void app_run(App& app) {
         SDL_RenderCopyF(app.renderer, app.scene_target, nullptr, &layout.scene_rect);
         session_render_overlay(app.session, app.assets, app.renderer, layout, SDL_GetTicks64());
         SDL_RenderPresent(app.renderer);
+
+        const float frame_time = frame_dt(frame_start, SDL_GetPerformanceCounter());
+        const float remaining = TARGET_FRAME_SECONDS - frame_time;
+        if (remaining > 0.0f) {
+            SDL_Delay(static_cast<Uint32>(remaining * 1000.0f));
+        }
     }
 }
 

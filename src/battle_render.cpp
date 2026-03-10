@@ -1,6 +1,7 @@
 #include "battle_render.hpp"
 
 #include "level_data.hpp"
+#include "pickup_defs.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,9 +11,9 @@
 namespace {
 
 constexpr float LABEL_DURATION = 1.2f;
-constexpr float PANEL_GAP = 12.0f;
-constexpr float LEFT_PANEL_WIDTH = 110.0f;
-constexpr float RIGHT_PANEL_WIDTH = 250.0f;
+constexpr float PANEL_GAP = 14.0f;
+constexpr float LEFT_PANEL_WIDTH = 94.0f;
+constexpr float RIGHT_PANEL_WIDTH = 220.0f;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -103,7 +104,8 @@ void draw_world_sprite(SDL_Renderer* renderer, const TextureAtlas& atlas, int ti
                        const CameraState& camera, Vec2 world_pos, float angle_deg = 0.0f,
                        Vec2 jitter = {0.0f, 0.0f}, float scale = 1.0f) {
     const SDL_Rect src = atlas_tile_rect(atlas, tile_index);
-    const Vec2 screen_pos = world_to_screen(camera, world_pos + jitter);
+    const Vec2 offset = atlas_tile_offset(atlas, tile_index);
+    const Vec2 screen_pos = world_to_screen(camera, world_pos + offset + jitter);
     const float draw_width = static_cast<float>(atlas.tile_width) * camera.zoom * scale;
     const float draw_height = static_cast<float>(atlas.tile_height) * camera.zoom * scale;
     const SDL_FRect dst = {screen_pos.x - draw_width * 0.5f, screen_pos.y - draw_height * 0.5f,
@@ -115,7 +117,8 @@ void draw_world_shadow(SDL_Renderer* renderer, const TextureAtlas& atlas, int ti
                        const CameraState& camera, Vec2 world_pos, float height, float angle_deg,
                        float scale) {
     const SDL_Rect src = atlas_tile_rect(atlas, tile_index);
-    const Vec2 screen_pos = world_to_screen(camera, world_pos);
+    const Vec2 offset = atlas_tile_offset(atlas, tile_index);
+    const Vec2 screen_pos = world_to_screen(camera, world_pos + offset);
     const float offset_x = 0.9f + height * camera.zoom * 0.14f;
     const float offset_y = 1.2f + height * camera.zoom * 0.24f;
     const float draw_width = static_cast<float>(atlas.tile_width) * camera.zoom * scale;
@@ -134,10 +137,12 @@ void draw_world_shadow(SDL_Renderer* renderer, const TextureAtlas& atlas, int ti
 void draw_ui_sprite(SDL_Renderer* renderer, const TextureAtlas& atlas, int tile_index,
                     float center_x, float center_y, float scale) {
     const SDL_Rect src = atlas_tile_rect(atlas, tile_index);
-    const SDL_FRect dst = {center_x - static_cast<float>(atlas.tile_width) * 0.5f * scale,
-                           center_y - static_cast<float>(atlas.tile_height) * 0.5f * scale,
-                           static_cast<float>(atlas.tile_width) * scale,
-                           static_cast<float>(atlas.tile_height) * scale};
+    const Vec2 offset = atlas_tile_offset(atlas, tile_index);
+    const SDL_FRect dst = {
+        center_x + offset.x * scale - static_cast<float>(atlas.tile_width) * 0.5f * scale,
+        center_y + offset.y * scale - static_cast<float>(atlas.tile_height) * 0.5f * scale,
+        static_cast<float>(atlas.tile_width) * scale,
+        static_cast<float>(atlas.tile_height) * scale};
     SDL_RenderCopyF(renderer, atlas.texture, &src, &dst);
 }
 
@@ -151,8 +156,8 @@ void draw_debug_box(SDL_Renderer* renderer, const CameraState& camera, Vec2 pos,
 }
 
 float enemy_scale(const Enemy& enemy) {
-    return enemy.is_boss ? std::max(2.6f, enemy.radius / 3.0f)
-                         : std::max(1.0f, enemy.radius / 3.0f);
+    return enemy.is_boss ? std::max(3.0f, enemy.radius / 3.0f)
+                         : std::max(1.45f, enemy.radius / 2.6f);
 }
 
 void render_title_scene(const Assets& assets, SDL_Renderer* renderer, Uint64 ticks) {
@@ -205,16 +210,21 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         draw_world_shadow(renderer, assets.particles, particle.tile, session.battle.camera,
                           particle.pos, particle.height, 0.0f, 1.0f);
     }
+    for (const PickupActor& pickup : session.battle.pickups) {
+        const PickupDef& def = pickup_def(pickup.def_index);
+        draw_world_shadow(renderer, assets.particles, def.icon_tile, session.battle.camera,
+                          pickup.pos, pickup.height, 0.0f, 1.2f);
+    }
 
     if (session.battle.player_active) {
         int ship_tile = player_ship_tile_center(0);
         if (session.battle.ship.vel.x <= -10.0f) {
-            ship_tile = 0;
-        } else if (session.battle.ship.vel.x >= 10.0f) {
             ship_tile = 2;
+        } else if (session.battle.ship.vel.x >= 10.0f) {
+            ship_tile = 0;
         }
         draw_world_shadow(renderer, assets.ships, ship_tile, session.battle.camera,
-                          session.battle.ship.pos, session.battle.ship.height, 0.0f, 1.0f);
+                          session.battle.ship.pos, session.battle.ship.height, 0.0f, 1.7f);
     }
 
     for (const Enemy& enemy : session.battle.enemies) {
@@ -236,20 +246,26 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         draw_world_sprite(renderer, assets.particles, particle.tile, session.battle.camera,
                           particle.pos);
     }
+    for (const PickupActor& pickup : session.battle.pickups) {
+        const PickupDef& def = pickup_def(pickup.def_index);
+        const float pulse = 1.15f + std::sin(pickup.age * 8.0f) * 0.08f;
+        draw_world_sprite(renderer, assets.particles, def.icon_tile, session.battle.camera,
+                          pickup.pos, 0.0f, {0.0f, 0.0f}, pulse);
+    }
 
     const bool hidden_for_blink = session.battle.invuln_timer > 0.0f &&
                                   std::fmod(session.battle.invuln_timer * 20.0f, 2.0f) < 1.0f;
     if (session.battle.player_active && !hidden_for_blink) {
         int ship_tile = player_ship_tile_center(0);
         if (session.battle.ship.vel.x <= -10.0f) {
-            ship_tile = 0;
-        } else if (session.battle.ship.vel.x >= 10.0f) {
             ship_tile = 2;
+        } else if (session.battle.ship.vel.x >= 10.0f) {
+            ship_tile = 0;
         }
         const Vec2 jitter = {random_range(-session.battle.ship.shake, session.battle.ship.shake),
                              random_range(-session.battle.ship.shake, session.battle.ship.shake)};
         draw_world_sprite(renderer, assets.ships, ship_tile, session.battle.camera,
-                          session.battle.ship.pos, 0.0f, jitter);
+                          session.battle.ship.pos, 0.0f, jitter, 1.7f);
     }
 
     if (session.battle.debug_colliders) {
@@ -264,6 +280,10 @@ void render_battle_scene(const SessionState& session, const Assets& assets,
         for (const EnemyBullet& bullet : session.battle.enemy_bullets) {
             draw_debug_box(renderer, session.battle.camera, bullet.pos, bullet.radius,
                            {64, 255, 255, 180});
+        }
+        for (const PickupActor& pickup : session.battle.pickups) {
+            draw_debug_box(renderer, session.battle.camera, pickup.pos, pickup.radius,
+                           {255, 128, 255, 180});
         }
         if (session.battle.player_active) {
             draw_debug_box(renderer, session.battle.camera, session.battle.ship.pos,
@@ -379,10 +399,29 @@ void render_battle_overlay(const SessionState& session, const Assets& assets,
         const std::string type = weapon.type == WeaponType::Basic ? "basic" : "missile";
         draw_text(renderer, assets.ui_font_small, std::to_string(static_cast<int>(i)) + " " + type,
                   x + 18.0f, y - 2.0f, primary);
-        draw_text(renderer, assets.ui_font_small,
-                  fixture + " p" + std::to_string(weapon.projectile_tile), x + 18.0f, y + 10.0f,
-                  secondary);
+        draw_text(renderer, assets.ui_font_small, fixture + (weapon.automatic ? " auto" : " semi"),
+                  x + 18.0f, y + 10.0f, secondary);
         y += 26.0f;
+    }
+
+    y += 6.0f;
+    draw_text(renderer, assets.ui_font_small,
+              "magnet " + std::to_string(static_cast<int>(session.battle.pickup_magnet_radius)), x,
+              y, secondary);
+    y += 18.0f;
+    draw_text(renderer, assets.ui_font_small, "pickup log", x, y, primary);
+    y += 16.0f;
+
+    for (auto it = session.battle.collected_pickups.rbegin();
+         it != session.battle.collected_pickups.rend() &&
+         y < layout.right_panel.y + layout.right_panel.h - 18.0f;
+         ++it) {
+        const PickupDef& def = pickup_def(*it);
+        draw_ui_sprite(renderer, assets.particles, def.icon_tile, x + 8.0f, y + 8.0f, 1.6f);
+        draw_text(renderer, assets.ui_font_small, def.name, x + 18.0f, y - 2.0f, primary);
+        draw_text(renderer, assets.ui_font_small, pickup_tier_name(def.tier), x + 18.0f, y + 10.0f,
+                  secondary);
+        y += 24.0f;
     }
 
     render_wave_label(session, assets, renderer, layout);
@@ -393,23 +432,20 @@ void render_battle_overlay(const SessionState& session, const Assets& assets,
 ScreenLayout make_screen_layout(int window_width, int window_height) {
     const float width = static_cast<float>(window_width);
     const float height = static_cast<float>(window_height);
-    const float scene_available_width =
-        std::max(0.0f, width - LEFT_PANEL_WIDTH - RIGHT_PANEL_WIDTH - PANEL_GAP * 4.0f);
-    const float scene_available_height = std::max(0.0f, height - PANEL_GAP * 2.0f);
-    const float scale = std::min(scene_available_width / static_cast<float>(GAME_WIDTH),
-                                 scene_available_height / static_cast<float>(GAME_HEIGHT));
+    const float scale =
+        std::max(1.0f, std::floor(std::min(width / static_cast<float>(GAME_WIDTH),
+                                           height / static_cast<float>(GAME_HEIGHT))));
 
-    const float scene_width = std::floor(static_cast<float>(GAME_WIDTH) * scale);
-    const float scene_height = std::floor(static_cast<float>(GAME_HEIGHT) * scale);
-    const float scene_x = LEFT_PANEL_WIDTH + PANEL_GAP * 2.0f +
-                          std::floor((scene_available_width - scene_width) * 0.5f);
+    const float scene_width = static_cast<float>(GAME_WIDTH) * scale;
+    const float scene_height = static_cast<float>(GAME_HEIGHT) * scale;
+    const float scene_x = std::floor((width - scene_width) * 0.5f);
     const float scene_y = std::floor((height - scene_height) * 0.5f);
 
     ScreenLayout layout{};
     layout.scene_rect = {scene_x, scene_y, scene_width, scene_height};
-    layout.left_panel = {PANEL_GAP, PANEL_GAP, LEFT_PANEL_WIDTH, height - PANEL_GAP * 2.0f};
+    layout.left_panel = {PANEL_GAP, PANEL_GAP, LEFT_PANEL_WIDTH, 170.0f};
     layout.right_panel = {width - RIGHT_PANEL_WIDTH - PANEL_GAP, PANEL_GAP, RIGHT_PANEL_WIDTH,
-                          height - PANEL_GAP * 2.0f};
+                          290.0f};
     return layout;
 }
 

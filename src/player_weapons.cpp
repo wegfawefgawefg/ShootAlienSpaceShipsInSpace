@@ -18,7 +18,7 @@ void spawn_player_bullet(BattleState& battle, const Weapon& weapon, Vec2 spawn_p
     const Vec2 dir = {std::cos(angle), std::sin(angle)};
     battle.player_bullets.push_back({
         spawn_pos,
-        dir * weapon.projectile_speed,
+        dir * (weapon.projectile_speed * battle.projectile_speed_scale),
         0.0f,
         weapon.projectile_radius,
         weapon.damage,
@@ -32,9 +32,13 @@ void spawn_player_bullet(BattleState& battle, const Weapon& weapon, Vec2 spawn_p
 
 } // namespace
 
-void fire_player_weapons(BattleState& battle, Assets& assets) {
+void fire_player_weapons(BattleState& battle, Assets& assets, bool trigger_pressed,
+                         bool trigger_held) {
     for (Weapon& weapon : battle.weapons) {
         if (weapon.cooldown_timer > 0.0f) {
+            continue;
+        }
+        if ((weapon.automatic && !trigger_held) || (!weapon.automatic && !trigger_pressed)) {
             continue;
         }
 

@@ -5,6 +5,7 @@
 
 #include <SDL2/SDL.h>
 #include <array>
+#include <string>
 #include <vector>
 
 inline constexpr int GAME_WIDTH = 640;
@@ -54,6 +55,7 @@ enum class WeaponFixture {
 struct Weapon {
     WeaponType type{WeaponType::Basic};
     WeaponFixture fixture{WeaponFixture::Center};
+    bool automatic{false};
     int projectile_tile{1};
     int projectile_count{1};
     float cooldown{0.12f};
@@ -146,11 +148,13 @@ struct Enemy {
     float hover_phase{0.0f};
     float speed_scale{1.0f};
     float boss_behavior_timer{0.0f};
+    float entry_timer{0.0f};
     int type_id{0};
     int wave_tag{0};
     int boss_group_index{0};
     int boss_behavior_index{0};
     bool is_boss{false};
+    bool entering{true};
     std::array<std::array<EnemyBehavior, 3>, 3> boss_behavior_groups{};
     std::array<int, 3> boss_group_sizes{{0, 0, 0}};
     EnemyBehavior behavior{EnemyBehavior::Straight};
@@ -162,6 +166,21 @@ struct InputState {
     bool right{false};
     bool up{false};
     bool down{false};
+    bool shoot{false};
+    bool shoot_pressed{false};
+};
+
+struct PickupActor {
+    int def_index{-1};
+    Vec2 pos{};
+    Vec2 vel{};
+    Vec2 guide_target{};
+    float age{0.0f};
+    float radius{5.0f};
+    float base_height{2.0f};
+    float height{2.0f};
+    float target_height{2.0f};
+    bool guided{true};
 };
 
 struct LevelSpawnDef {
@@ -198,7 +217,9 @@ struct BattleState {
     std::vector<EnemyBullet> enemy_bullets{};
     std::vector<Enemy> enemies{};
     std::vector<Particle> particles{};
+    std::vector<PickupActor> pickups{};
     std::vector<Star> stars{};
+    std::vector<int> collected_pickups{};
     CameraState camera{};
     float warp_level{0.0f};
     float level_timer{0.0f};
@@ -206,6 +227,9 @@ struct BattleState {
     float wave_timer{0.0f};
     float respawn_timer{0.0f};
     float invuln_timer{0.0f};
+    float pickup_magnet_radius{22.0f};
+    float camera_shake_scale{1.0f};
+    float projectile_speed_scale{1.0f};
     bool can_shoot{false};
     bool player_active{true};
     bool debug_colliders{true};

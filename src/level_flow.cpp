@@ -3,6 +3,7 @@
 #include "damage.hpp"
 #include "enemy_behavior.hpp"
 #include "level_data.hpp"
+#include "pickups.hpp"
 #include "player_weapons.hpp"
 
 #include <SDL2/SDL_mixer.h>
@@ -17,6 +18,7 @@ constexpr float PLAYER_DRAG = 10.0f;
 constexpr float BASE_WARP_LEVEL = 0.0f;
 constexpr float INTRO_WARP_LEVEL = 1.0f;
 constexpr float CAMERA_SHAKE_DECAY = 18.0f;
+constexpr int SIM_SUBSTEPS = 2;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -84,10 +86,15 @@ void reset_battle(BattleState& battle, Assets& assets) {
     battle.warp_level = BASE_WARP_LEVEL;
     battle.respawn_timer = 0.0f;
     battle.invuln_timer = 0.0f;
+    battle.pickup_magnet_radius = 22.0f;
+    battle.camera_shake_scale = 1.0f;
+    battle.projectile_speed_scale = 1.0f;
     battle.player_active = true;
     battle.lives = 3;
     battle.hitstop_frames = 0;
     battle.particles.clear();
+    battle.pickups.clear();
+    battle.collected_pickups.clear();
     seed_default_weapons(battle);
     populate_starfield(battle);
     begin_level_transition(battle, assets, 0);
@@ -220,10 +227,6 @@ void session_handle_event(SessionState& session, Assets& assets, const SDL_Event
             switch_to_title(session, assets);
             return;
         }
-        if (scancode == SDL_SCANCODE_SPACE && session.battle.can_shoot &&
-            session.battle.player_active) {
-            fire_player_weapons(session.battle, assets);
-        }
     }
 }
 
@@ -243,25 +246,36 @@ void session_update(SessionState& session, Assets& assets, float dt) {
     session.input.right = keyboard[SDL_SCANCODE_RIGHT] != 0 || keyboard[SDL_SCANCODE_D] != 0;
     session.input.up = keyboard[SDL_SCANCODE_UP] != 0 || keyboard[SDL_SCANCODE_W] != 0;
     session.input.down = keyboard[SDL_SCANCODE_DOWN] != 0 || keyboard[SDL_SCANCODE_S] != 0;
+    const bool shoot_now = keyboard[SDL_SCANCODE_SPACE] != 0;
+    session.input.shoot_pressed = shoot_now && !session.input.shoot;
+    session.input.shoot = shoot_now;
 
-    update_player_ship(session.battle, session.input, dt);
     update_camera(session.battle, dt);
     update_warp(session.battle, dt);
     update_starfield(session.battle, dt);
-    update_player_respawn(session.battle, dt);
-
-    if (session.battle.phase == BattlePhase::LevelIntro) {
-        if (update_enemy_intro(session.battle, dt)) {
-            Mix_PlayChannel(-1, assets.warp_stop, 0);
-        }
-    } else {
-        update_enemy_wave(session.battle, dt);
+    if (session.battle.can_shoot && session.battle.player_active) {
+        fire_player_weapons(session.battle, assets, session.input.shoot_pressed,
+                            session.input.shoot);
     }
+    const float substep_dt = dt / static_cast<float>(SIM_SUBSTEPS);
+    for (int step = 0; step < SIM_SUBSTEPS; ++step) {
+        update_player_ship(session.battle, session.input, substep_dt);
+        update_player_respawn(session.battle, substep_dt);
 
-    update_player_bullets(session.battle, dt);
-    update_enemy_bullets(session.battle, dt);
-    update_particles(session.battle, dt);
-    resolve_damage(session.battle);
+        if (session.battle.phase == BattlePhase::LevelIntro) {
+            if (update_enemy_intro(session.battle, substep_dt)) {
+                Mix_PlayChannel(-1, assets.warp_stop, 0);
+            }
+        } else {
+            update_enemy_wave(session.battle, substep_dt);
+        }
+
+        update_player_bullets(session.battle, substep_dt);
+        update_enemy_bullets(session.battle, substep_dt);
+        update_particles(session.battle, substep_dt);
+        update_pickups(session.battle, assets, substep_dt);
+        resolve_damage(session.battle, assets);
+    }
     if (session.battle.phase == BattlePhase::Active) {
         if (session.battle.wave_has_timer) {
             session.battle.wave_timer = std::max(0.0f, session.battle.wave_timer - dt);

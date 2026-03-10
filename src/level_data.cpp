@@ -254,6 +254,7 @@ void seed_default_weapons(BattleState& battle) {
     battle.weapons.push_back({
         WeaponType::Basic,
         WeaponFixture::Center,
+        false,
         1,
         1,
         0.12f,
@@ -267,6 +268,7 @@ void seed_default_weapons(BattleState& battle) {
     battle.weapons.push_back({
         WeaponType::Basic,
         WeaponFixture::Splayed,
+        false,
         0,
         2,
         0.3f,

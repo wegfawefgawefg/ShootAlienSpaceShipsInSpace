@@ -1,5 +1,8 @@
 #include "damage.hpp"
 
+#include "assets.hpp"
+#include "pickups.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -24,7 +27,8 @@ int random_index(int count) {
 
 void add_hitstop(BattleState& battle, int frames) {
     battle.hitstop_frames += frames;
-    battle.camera.shake = std::max(battle.camera.shake, 2.2f + static_cast<float>(frames) * 0.4f);
+    battle.camera.shake = std::max(battle.camera.shake, (3.2f + static_cast<float>(frames) * 0.8f) *
+                                                            battle.camera_shake_scale);
 }
 
 void spawn_explosion(BattleState& battle, Vec2 pos, int count) {
@@ -55,10 +59,10 @@ void damage_player(BattleState& battle) {
     battle.respawn_timer = (battle.lives > 0) ? PLAYER_RESPAWN_TIME : 0.0f;
     battle.invuln_timer = PLAYER_INVULN_TIME;
     battle.ship.vel = {0.0f, 0.0f};
-    battle.ship.shake = 6.0f;
+    battle.ship.shake = 10.0f;
     battle.can_shoot = false;
     battle.ship.target_height = battle.ship.base_height - 1.5f;
-    add_hitstop(battle, 4);
+    add_hitstop(battle, 6);
 }
 
 } // namespace
@@ -114,7 +118,7 @@ void update_player_respawn(BattleState& battle, float dt) {
     }
 }
 
-void resolve_damage(BattleState& battle) {
+void resolve_damage(BattleState& battle, Assets& assets) {
     std::vector<Enemy> surviving_enemies;
     surviving_enemies.reserve(battle.enemies.size());
 
@@ -125,11 +129,12 @@ void resolve_damage(BattleState& battle) {
             if (vec2_length_sq(enemy.pos - bullet.pos) <= radius * radius) {
                 bullet.age = 999.0f;
                 enemy.hp -= bullet.damage;
-                enemy.shake = 4.0f;
+                enemy.shake = enemy.is_boss ? 6.0f : 5.0f;
                 enemy.target_height = enemy.base_height - 1.0f;
-                add_hitstop(battle, 1);
+                add_hitstop(battle, enemy.is_boss ? 3 : 2);
                 if (enemy.hp <= 0.0f) {
                     spawn_explosion(battle, enemy.pos, 10);
+                    maybe_spawn_enemy_drop(battle, enemy);
                     dead = true;
                 }
                 break;
@@ -152,6 +157,8 @@ void resolve_damage(BattleState& battle) {
             if (vec2_length_sq(battle.ship.pos - bullet.pos) <= radius * radius) {
                 bullet.age = 999.0f;
                 damage_player(battle);
+                Mix_PlayChannel(
+                    -1, assets.rock_hit_sounds[static_cast<std::size_t>(random_index(3))], 0);
                 break;
             }
         }
@@ -160,6 +167,8 @@ void resolve_damage(BattleState& battle) {
             const float radius = enemy.radius + battle.ship.radius;
             if (vec2_length_sq(battle.ship.pos - enemy.pos) <= radius * radius) {
                 damage_player(battle);
+                Mix_PlayChannel(
+                    -1, assets.rock_hit_sounds[static_cast<std::size_t>(random_index(3))], 0);
                 break;
             }
         }

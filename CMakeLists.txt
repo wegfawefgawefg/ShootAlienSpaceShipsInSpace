@@ -20,6 +20,8 @@ set(SASSIS_SOURCES
   "${CMAKE_SOURCE_DIR}/src/enemy_behavior.cpp"
   "${CMAKE_SOURCE_DIR}/src/level_data.cpp"
   "${CMAKE_SOURCE_DIR}/src/level_flow.cpp"
+  "${CMAKE_SOURCE_DIR}/src/pickup_defs.cpp"
+  "${CMAKE_SOURCE_DIR}/src/pickups.cpp"
   "${CMAKE_SOURCE_DIR}/src/player_weapons.cpp"
 )
 
@@ -33,6 +35,8 @@ set(SASSIS_HEADERS
   "${CMAKE_SOURCE_DIR}/src/level_data.hpp"
   "${CMAKE_SOURCE_DIR}/src/level_flow.hpp"
   "${CMAKE_SOURCE_DIR}/src/math.hpp"
+  "${CMAKE_SOURCE_DIR}/src/pickup_defs.hpp"
+  "${CMAKE_SOURCE_DIR}/src/pickups.hpp"
   "${CMAKE_SOURCE_DIR}/src/player_weapons.hpp"
 )
 

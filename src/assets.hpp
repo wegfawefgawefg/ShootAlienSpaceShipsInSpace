@@ -1,10 +1,13 @@
 #pragma once
 
+#include "math.hpp"
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
 #include <array>
+#include <vector>
 
 struct TextureAtlas {
     SDL_Texture* texture{nullptr};
@@ -12,6 +15,7 @@ struct TextureAtlas {
     int rows{1};
     int tile_width{8};
     int tile_height{8};
+    std::vector<Vec2> tile_offsets{};
 };
 
 struct Assets {
@@ -34,3 +38,4 @@ bool assets_load(Assets& assets, SDL_Renderer* renderer);
 void assets_unload(Assets& assets);
 
 SDL_Rect atlas_tile_rect(const TextureAtlas& atlas, int tile_index);
+Vec2 atlas_tile_offset(const TextureAtlas& atlas, int tile_index);

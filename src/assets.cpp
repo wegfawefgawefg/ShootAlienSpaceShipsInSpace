@@ -1,6 +1,8 @@
 #include "assets.hpp"
 
 #include <array>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <string>
 
@@ -71,6 +73,84 @@ bool load_sound_array(std::array<Mix_Chunk*, 2>& sounds, const std::array<const 
     return true;
 }
 
+Vec2 compute_tile_offset(SDL_Surface* surface, int tile_x, int tile_y, int tile_width,
+                         int tile_height) {
+    int min_x = tile_width;
+    int min_y = tile_height;
+    int max_x = -1;
+    int max_y = -1;
+
+    SDL_LockSurface(surface);
+    for (int local_y = 0; local_y < tile_height; ++local_y) {
+        for (int local_x = 0; local_x < tile_width; ++local_x) {
+            const int x = tile_x + local_x;
+            const int y = tile_y + local_y;
+            const auto* pixels = static_cast<const std::uint8_t*>(surface->pixels);
+            const auto* pixel_ptr =
+                pixels + y * surface->pitch + x * surface->format->BytesPerPixel;
+            std::uint32_t pixel = 0;
+            std::memcpy(&pixel, pixel_ptr,
+                        static_cast<std::size_t>(surface->format->BytesPerPixel));
+            std::uint8_t r = 0;
+            std::uint8_t g = 0;
+            std::uint8_t b = 0;
+            std::uint8_t a = 0;
+            SDL_GetRGBA(pixel, surface->format, &r, &g, &b, &a);
+            if (a == 0) {
+                continue;
+            }
+            min_x = std::min(min_x, local_x);
+            min_y = std::min(min_y, local_y);
+            max_x = std::max(max_x, local_x);
+            max_y = std::max(max_y, local_y);
+        }
+    }
+    SDL_UnlockSurface(surface);
+
+    if (max_x < min_x || max_y < min_y) {
+        return {};
+    }
+
+    const float tile_center_x = (static_cast<float>(tile_width) - 1.0f) * 0.5f;
+    const float tile_center_y = (static_cast<float>(tile_height) - 1.0f) * 0.5f;
+    const float visual_center_x = (static_cast<float>(min_x) + static_cast<float>(max_x)) * 0.5f;
+    const float visual_center_y = (static_cast<float>(min_y) + static_cast<float>(max_y)) * 0.5f;
+    return {tile_center_x - visual_center_x, tile_center_y - visual_center_y};
+}
+
+bool load_texture_atlas(SDL_Renderer* renderer, const char* path, TextureAtlas& atlas) {
+    SDL_Surface* loaded = IMG_Load(path);
+    if (!loaded) {
+        SDL_Log("IMG_Load failed for %s: %s", path, IMG_GetError());
+        return false;
+    }
+
+    SDL_Surface* surface = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(loaded);
+    if (!surface) {
+        SDL_Log("SDL_ConvertSurfaceFormat failed for %s: %s", path, SDL_GetError());
+        return false;
+    }
+
+    atlas.tile_offsets.clear();
+    atlas.tile_offsets.reserve(static_cast<std::size_t>(atlas.columns * atlas.rows));
+    for (int row = 0; row < atlas.rows; ++row) {
+        for (int col = 0; col < atlas.columns; ++col) {
+            atlas.tile_offsets.push_back(compute_tile_offset(surface, col * atlas.tile_width,
+                                                             row * atlas.tile_height,
+                                                             atlas.tile_width, atlas.tile_height));
+        }
+    }
+
+    atlas.texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+    if (!atlas.texture) {
+        SDL_Log("SDL_CreateTextureFromSurface failed for %s: %s", path, SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 bool assets_load(Assets& assets, SDL_Renderer* renderer) {
@@ -78,21 +158,21 @@ bool assets_load(Assets& assets, SDL_Renderer* renderer) {
     assets.ui_font_large = load_font(28);
     assets.menu_background = load_texture(renderer, "assets/cover.png");
     assets.menu_title = load_texture(renderer, "assets/title.png");
-    assets.ships.texture = load_texture(renderer, "assets/ships.png");
     assets.ships.columns = 10;
     assets.ships.rows = 10;
     assets.ships.tile_width = 8;
     assets.ships.tile_height = 8;
 
-    assets.particles.texture = load_texture(renderer, "assets/particles.png");
     assets.particles.columns = 6;
     assets.particles.rows = 10;
     assets.particles.tile_width = 8;
     assets.particles.tile_height = 8;
 
+    const bool atlases_ok = load_texture_atlas(renderer, "assets/ships.png", assets.ships) &&
+                            load_texture_atlas(renderer, "assets/particles.png", assets.particles);
+
     const bool textures_ok = assets.ui_font_small && assets.ui_font_large &&
-                             assets.menu_background && assets.menu_title && assets.ships.texture &&
-                             assets.particles.texture;
+                             assets.menu_background && assets.menu_title && atlases_ok;
     if (!textures_ok) {
         return false;
     }
@@ -181,4 +261,12 @@ SDL_Rect atlas_tile_rect(const TextureAtlas& atlas, int tile_index) {
         atlas.tile_width,
         atlas.tile_height,
     };
+}
+
+Vec2 atlas_tile_offset(const TextureAtlas& atlas, int tile_index) {
+    if (atlas.tile_offsets.empty()) {
+        return {};
+    }
+    const int wrapped = tile_index % static_cast<int>(atlas.tile_offsets.size());
+    return atlas.tile_offsets[static_cast<std::size_t>(wrapped)];
 }

@@ -1,0 +1,239 @@
+#include "pickup_defs.hpp"
+
+#include <array>
+#include <cstdlib>
+
+namespace {
+
+float random_unit() {
+    return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+}
+
+Weapon make_weapon(WeaponType type, WeaponFixture fixture, bool automatic, int projectile_tile,
+                   int projectile_count, float cooldown, float projectile_speed,
+                   float projectile_life, float projectile_radius, float damage,
+                   float spread_degrees) {
+    Weapon weapon{};
+    weapon.type = type;
+    weapon.fixture = fixture;
+    weapon.automatic = automatic;
+    weapon.projectile_tile = projectile_tile;
+    weapon.projectile_count = projectile_count;
+    weapon.cooldown = cooldown;
+    weapon.cooldown_timer = 0.0f;
+    weapon.projectile_speed = projectile_speed;
+    weapon.projectile_life = projectile_life;
+    weapon.projectile_radius = projectile_radius;
+    weapon.damage = damage;
+    weapon.spread_degrees = spread_degrees;
+    return weapon;
+}
+
+const std::vector<PickupDef> kPickupDefs = {
+    {
+        "twin_blaster",
+        "Twin Blaster",
+        "Adds a second center gun.",
+        1,
+        PickupTier::Common,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 1, 1, 0.16f, 1500.0f, 0.5f,
+                    1.25f, 1.0f, 0.0f),
+    },
+    {
+        "needle_cannon",
+        "Needle Cannon",
+        "Fast automatic shots with lighter damage.",
+        3,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Basic, WeaponFixture::Center, true, 3, 1, 0.06f, 1750.0f, 0.4f,
+                    1.0f, 0.55f, 0.0f),
+    },
+    {
+        "sidecar_spread",
+        "Sidecar Spread",
+        "Evenly spread side mount with light projectiles.",
+        5,
+        PickupTier::Common,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Basic, WeaponFixture::EvenlySpread, false, 5, 3, 0.20f, 1450.0f,
+                    0.52f, 1.15f, 0.6f, 0.0f),
+    },
+    {
+        "missile_pod",
+        "Missile Pod",
+        "Slow heavy shots with real punch.",
+        15,
+        PickupTier::Rare,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Missile, WeaponFixture::Center, false, 15, 1, 0.45f, 920.0f, 0.9f,
+                    1.75f, 2.8f, 0.0f),
+    },
+    {
+        "prism_fan",
+        "Prism Fan",
+        "A wide splayed burst.",
+        9,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Basic, WeaponFixture::Splayed, false, 9, 3, 0.28f, 1480.0f, 0.52f,
+                    1.15f, 0.7f, 12.0f),
+    },
+    {
+        "heavy_lance",
+        "Heavy Lance",
+        "A slower but harder-hitting center shot.",
+        12,
+        PickupTier::Uncommon,
+        PickupEffectType::GrantWeapon,
+        make_weapon(WeaponType::Basic, WeaponFixture::Center, false, 12, 1, 0.32f, 1700.0f, 0.6f,
+                    1.45f, 2.0f, 0.0f),
+    },
+    {
+        "hair_trigger",
+        "Hair Trigger",
+        "Faster cooldown, lower damage.",
+        24,
+        PickupTier::Common,
+        PickupEffectType::UpgradeRandomRate,
+        {},
+        0.72f,
+        0.86f,
+    },
+    {
+        "heavy_slugs",
+        "Heavy Slugs",
+        "Higher damage, slower cadence.",
+        25,
+        PickupTier::Common,
+        PickupEffectType::UpgradeRandomDamage,
+        {},
+        1.35f,
+        1.18f,
+    },
+    {
+        "auto_retrofit",
+        "Auto Retrofit",
+        "Makes a random weapon automatic with a damage penalty.",
+        26,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomAuto,
+        {},
+        0.84f,
+    },
+    {
+        "scatter_caps",
+        "Scatter Caps",
+        "More pellets, less damage per pellet.",
+        27,
+        PickupTier::Uncommon,
+        PickupEffectType::UpgradeRandomSpread,
+        {},
+        0.74f,
+        6.0f,
+    },
+    {
+        "hull_patch",
+        "Hull Patch",
+        "Gain one extra life.",
+        31,
+        PickupTier::Rare,
+        PickupEffectType::ExtraLife,
+        {},
+        1.0f,
+    },
+    {
+        "magnet_core",
+        "Magnet Core",
+        "Pull pickups from farther away.",
+        28,
+        PickupTier::Common,
+        PickupEffectType::PickupMagnet,
+        {},
+        18.0f,
+    },
+    {
+        "glass_reactor",
+        "Glass Reactor",
+        "All guns hit harder, but your hurtbox grows.",
+        29,
+        PickupTier::Rare,
+        PickupEffectType::GlassReactor,
+        {},
+        1.18f,
+        0.4f,
+    },
+    {
+        "stability_fins",
+        "Stability Fins",
+        "Calmer impact shake, slightly slower projectiles.",
+        30,
+        PickupTier::Common,
+        PickupEffectType::StabilityFins,
+        {},
+        0.78f,
+        0.94f,
+    },
+};
+
+const std::array<PickupTier, 5> kCommonRolls = {
+    PickupTier::Common,   PickupTier::Common, PickupTier::Common,
+    PickupTier::Uncommon, PickupTier::Rare,
+};
+
+const std::array<PickupTier, 6> kBossRolls = {
+    PickupTier::Boss,     PickupTier::Rare, PickupTier::Rare,
+    PickupTier::Uncommon, PickupTier::Boss, PickupTier::Rare,
+};
+
+} // namespace
+
+const std::vector<PickupDef>& pickup_defs() {
+    return kPickupDefs;
+}
+
+const PickupDef& pickup_def(int index) {
+    return kPickupDefs.at(static_cast<std::size_t>(index));
+}
+
+const char* pickup_tier_name(PickupTier tier) {
+    switch (tier) {
+    case PickupTier::Common:
+        return "common";
+    case PickupTier::Uncommon:
+        return "uncommon";
+    case PickupTier::Rare:
+        return "rare";
+    case PickupTier::Boss:
+        return "boss";
+    case PickupTier::Cursed:
+        return "cursed";
+    }
+    return "?";
+}
+
+int roll_pickup_drop(const Enemy& enemy) {
+    const float chance =
+        enemy.is_boss ? 1.0f : (0.15f + std::min(0.20f, (enemy.max_hp - 1.0f) * 0.05f));
+    if (!enemy.is_boss && random_unit() > chance) {
+        return -1;
+    }
+
+    const PickupTier desired =
+        enemy.is_boss ? kBossRolls[static_cast<std::size_t>(std::rand()) % kBossRolls.size()]
+                      : kCommonRolls[static_cast<std::size_t>(std::rand()) % kCommonRolls.size()];
+
+    std::vector<int> matches;
+    for (std::size_t i = 0; i < kPickupDefs.size(); ++i) {
+        const PickupDef& def = kPickupDefs[i];
+        if (def.tier == desired || (enemy.is_boss && def.tier == PickupTier::Rare)) {
+            matches.push_back(static_cast<int>(i));
+        }
+    }
+
+    if (matches.empty()) {
+        return -1;
+    }
+    return matches[static_cast<std::size_t>(std::rand()) % matches.size()];
+}

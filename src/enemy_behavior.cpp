@@ -9,6 +9,7 @@
 namespace {
 
 constexpr float LEVEL_INTRO_DURATION = 2.5f;
+constexpr float ENTRY_DURATION = 1.2f;
 
 float random_unit() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -52,6 +53,12 @@ void spawn_enemy_bullet_at_player(BattleState& battle, const Enemy& enemy, float
     spawn_enemy_bullet_dir(battle, enemy.pos, battle.ship.pos - enemy.pos, speed);
 }
 
+void move_enemy_toward(Enemy& enemy, Vec2 target, float response, float dt) {
+    const Vec2 delta = target - enemy.pos;
+    enemy.vel = delta * response;
+    enemy.pos += delta * std::min(1.0f, dt * response);
+}
+
 void spawn_spoke_burst(BattleState& battle, const Enemy& enemy, int spokes, float rotation_deg,
                        float speed) {
     const float step = 360.0f / static_cast<float>(spokes);
@@ -87,6 +94,25 @@ void update_enemy_facing(Enemy& enemy, const Ship& ship) {
         enemy.angle_deg = 180.0f;
         break;
     }
+}
+
+bool update_enemy_entry(Enemy& enemy, float dt) {
+    enemy.entry_timer += dt;
+    const float progress = clampf(enemy.entry_timer / ENTRY_DURATION, 0.0f, 1.0f);
+    const float eased = ease_out_cubic(progress);
+    enemy.pos = lerp(enemy.intro_start, enemy.formation_pos, eased);
+    enemy.vel = enemy.formation_pos - enemy.pos;
+    enemy.target_height = enemy.base_height + (1.0f - eased) * 3.0f;
+    enemy.height += (enemy.target_height - enemy.height) * std::min(1.0f, dt * 9.0f);
+    enemy.angle_deg = angle_from_vector(enemy.vel);
+    if (progress >= 1.0f) {
+        enemy.entering = false;
+        enemy.pos = enemy.formation_pos;
+        enemy.entry_timer = 0.0f;
+        enemy.vel = {0.0f, 0.0f};
+        return true;
+    }
+    return false;
 }
 
 void update_boss_behavior_selection(Enemy& enemy, float dt) {
@@ -144,9 +170,10 @@ void update_enemy_behavior(Enemy& enemy, BattleState& battle, float dt) {
     }
 
     case EnemyBehavior::TopShooter:
-        enemy.pos.x = enemy.formation_pos.x + std::sin(enemy.behavior_timer * 1.8f) * 36.0f;
-        enemy.pos.y = enemy.formation_pos.y + std::sin(enemy.behavior_timer * 0.7f) * 10.0f;
-        enemy.vel = {std::cos(enemy.behavior_timer * 1.8f) * 60.0f * enemy.speed_scale, 0.0f};
+        move_enemy_toward(enemy,
+                          {enemy.formation_pos.x + std::sin(enemy.behavior_timer * 1.8f) * 36.0f,
+                           enemy.formation_pos.y + std::sin(enemy.behavior_timer * 0.7f) * 10.0f},
+                          4.5f, dt);
         if (enemy.shoot_timer <= 0.0f) {
             spawn_enemy_bullet_at_player(battle, enemy, 170.0f * enemy.speed_scale);
             enemy.shoot_timer = 1.0f + random_range(0.0f, 0.6f);
@@ -175,9 +202,10 @@ void update_enemy_behavior(Enemy& enemy, BattleState& battle, float dt) {
 
     case EnemyBehavior::Circler:
         enemy.orbit_phase += dt * (1.2f + enemy.speed_scale * 0.5f);
-        enemy.pos = {enemy.formation_pos.x + std::cos(enemy.orbit_phase) * 34.0f,
-                     enemy.formation_pos.y + std::sin(enemy.orbit_phase) * 20.0f};
-        enemy.vel = {-std::sin(enemy.orbit_phase) * 40.0f, std::cos(enemy.orbit_phase) * 28.0f};
+        move_enemy_toward(enemy,
+                          {enemy.formation_pos.x + std::cos(enemy.orbit_phase) * 34.0f,
+                           enemy.formation_pos.y + std::sin(enemy.orbit_phase) * 20.0f},
+                          5.0f, dt);
         break;
 
     case EnemyBehavior::Wander: {
@@ -197,9 +225,10 @@ void update_enemy_behavior(Enemy& enemy, BattleState& battle, float dt) {
     }
 
     case EnemyBehavior::BossSpray:
-        enemy.pos.x = enemy.formation_pos.x + std::sin(enemy.behavior_timer * 1.1f) * 90.0f;
-        enemy.pos.y = enemy.formation_pos.y + std::sin(enemy.behavior_timer * 0.55f) * 12.0f;
-        enemy.vel = {std::cos(enemy.behavior_timer * 1.1f) * 70.0f, 0.0f};
+        move_enemy_toward(enemy,
+                          {enemy.formation_pos.x + std::sin(enemy.behavior_timer * 1.1f) * 90.0f,
+                           enemy.formation_pos.y + std::sin(enemy.behavior_timer * 0.55f) * 12.0f},
+                          3.8f, dt);
         if (enemy.shoot_timer <= 0.0f) {
             for (float spread : {-18.0f, -9.0f, 0.0f, 9.0f, 18.0f}) {
                 const float angle = (90.0f + spread) * 0.0174532925f;
@@ -211,9 +240,10 @@ void update_enemy_behavior(Enemy& enemy, BattleState& battle, float dt) {
         break;
 
     case EnemyBehavior::BossSpokes:
-        enemy.pos.x = enemy.formation_pos.x + std::sin(enemy.behavior_timer * 0.8f) * 56.0f;
-        enemy.pos.y = enemy.formation_pos.y + std::cos(enemy.behavior_timer * 0.45f) * 10.0f;
-        enemy.vel = {std::cos(enemy.behavior_timer * 0.8f) * 44.0f, 0.0f};
+        move_enemy_toward(enemy,
+                          {enemy.formation_pos.x + std::sin(enemy.behavior_timer * 0.8f) * 56.0f,
+                           enemy.formation_pos.y + std::cos(enemy.behavior_timer * 0.45f) * 10.0f},
+                          3.8f, dt);
         if (enemy.shoot_timer <= 0.0f) {
             spawn_spoke_burst(battle, enemy, 10, enemy.behavior_timer * 80.0f, 150.0f);
             enemy.shoot_timer = 1.0f;
@@ -278,11 +308,11 @@ bool spawn_next_wave(BattleState& battle) {
         enemy.type_id = spawn.type_id;
         enemy.behavior = spawn.behavior;
         enemy.facing = spawn.facing;
-        enemy.radius = spawn.radius;
+        enemy.is_boss = spawn.is_boss;
+        enemy.radius = enemy.is_boss ? spawn.radius : std::max(4.25f, spawn.radius * 1.55f);
         enemy.hp = spawn.hp;
         enemy.max_hp = spawn.hp;
         enemy.speed_scale = spawn.speed_scale;
-        enemy.is_boss = spawn.is_boss;
         enemy.boss_behavior_groups = spawn.boss_behavior_groups;
         enemy.boss_group_sizes = spawn.boss_group_sizes;
         enemy.wave_tag = battle.active_wave_tag;
@@ -292,6 +322,8 @@ bool spawn_next_wave(BattleState& battle) {
         enemy.target_height = enemy.base_height;
         enemy.orbit_phase = random_range(0.0f, 6.2831853f);
         enemy.shoot_timer = random_range(0.2f, 1.0f);
+        enemy.entering = true;
+        enemy.entry_timer = 0.0f;
         battle.enemies.push_back(enemy);
     }
     return true;
@@ -326,6 +358,14 @@ bool update_enemy_intro(BattleState& battle, float dt) {
     }
 
     if (battle.level_timer >= LEVEL_INTRO_DURATION) {
+        for (Enemy& enemy : battle.enemies) {
+            enemy.pos = enemy.formation_pos;
+            enemy.vel = {0.0f, 0.0f};
+            enemy.entering = false;
+            enemy.entry_timer = 0.0f;
+            enemy.height = enemy.base_height;
+            enemy.target_height = enemy.base_height;
+        }
         battle.level_timer = 0.0f;
         battle.phase = BattlePhase::Active;
         battle.can_shoot = true;
@@ -338,6 +378,10 @@ void update_enemy_wave(BattleState& battle, float dt) {
     battle.level_timer += dt;
     battle.level_text_timer += dt;
     for (Enemy& enemy : battle.enemies) {
-        update_enemy_behavior(enemy, battle, dt);
+        if (enemy.entering) {
+            update_enemy_entry(enemy, dt);
+        } else {
+            update_enemy_behavior(enemy, battle, dt);
+        }
     }
 }

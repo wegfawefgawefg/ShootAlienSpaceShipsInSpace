@@ -1,6 +1,9 @@
-# Shoot Alien Space Ships In Space Design
+#Shoot Alien Space Ships In Space Design
 
 This document is the target for the C++ reboot from this point forward.
+
+Progression and loot direction lives in:
+- [progression.md](./progression.md)
 
 The older Python repo is still the reference for the basic feel and assets:
 - title screen
@@ -29,6 +32,8 @@ From here, the C++ version intentionally grows past the Python prototype.
 - Render the gameplay world to a half-resolution intermediate texture: `640x360`
 - Render the UI directly at full window resolution
 - Keep the world pixelated and the overlay crisp
+- The world view should integer-scale to fill the window, not sit in a small floating center box.
+- UI should stay compact and sit as full-resolution overlays in corners instead of stealing large gutters.
 
 ## Controls
 
@@ -270,6 +275,8 @@ These are separate from behavior so the same movement logic can support differen
 - Player remains in the active play space
 - Bullets and enemies use simple collision checks
 - No heavy physics library
+- Ships should never pop into view at their behavior target position.
+- New wave enemies should enter from off-screen and fly into formation before behaving normally.
 
 ## Combat Feel
 
@@ -277,6 +284,9 @@ These are separate from behavior so the same movement logic can support differen
 - Use a generic stop-frame counter that can be increased by larger events
 - Most hits should be small
 - Bigger enemies / stronger hits can add more stop frames
+- Shake on the player, enemies, and camera can be more aggressive than the current mild values.
+- Run the simulation at `144 Hz` with fixed steps.
+- Use substeps for better collision reliability so fast bullets do not step through enemies.
 
 ## Debug And UI
 
